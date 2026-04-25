@@ -102,23 +102,27 @@ def parse_new_format(xl, week_num, year):
 
         # Find column indices
         hrow = df.iloc[header_row]
-        col_num = next((c for c,v in enumerate(hrow) if str(v).strip()=='מספר'), 1)
-        col_name = next((c for c,v in enumerate(hrow) if str(v).strip()=='שם סניף'), 2)
-        col_yavesh = next((c for c,v in enumerate(hrow) if str(v).strip()=='יבש'), 3)
-        col_batzek = next((c for c,v in enumerate(hrow) if str(v).strip()=='בצק'), 4)
+        col_num     = next((c for c,v in enumerate(hrow) if str(v).strip()=='מספר'), 1)
+        col_name    = next((c for c,v in enumerate(hrow) if str(v).strip()=='שם סניף'), 2)
+        col_yavesh  = next((c for c,v in enumerate(hrow) if str(v).strip()=='יבש'), 3)
+        col_batzek  = next((c for c,v in enumerate(hrow) if str(v).strip()=='בצק'), 4)
         col_cartons = next((c for c,v in enumerate(hrow) if str(v).strip()=='קרטונים'), 5)
-        col_mush = next((c for c,v in enumerate(hrow) if str(v).strip()=='פטריות'), 6)
+        col_mush    = next((c for c,v in enumerate(hrow) if str(v).strip()=='פטריות'), 6)
+        # "החזרה" column — searched by name, works wherever it's placed (e.g. col J)
+        col_returns = next((c for c,v in enumerate(hrow) if str(v).strip() in ('החזרה','החזרות')), None)
 
         # Build branch quantity map from left table
         branch_qty = {}
         for _, row in df.iloc[header_row+1:].iterrows():
             num = to_int(row.iloc[col_num])
             if num <= 0: continue
+            ret = to_int(row.iloc[col_returns]) if col_returns is not None and col_returns < len(row) else 0
             branch_qty[num] = {
                 'יבש': to_int(row.iloc[col_yavesh]),
                 'בצק': to_int(row.iloc[col_batzek]),
                 'קרטונים': to_int(row.iloc[col_cartons]),
                 'פטריות': to_int(row.iloc[col_mush]),
+                'החזרות': ret,
             }
 
         # ── Right tables: driver assignments ──
@@ -186,7 +190,7 @@ def parse_new_format(xl, week_num, year):
                 'driver_lic': drv[1], 'driver_name': drv[0],
                 'יבש': qty['יבש'], 'בצק': qty['בצק'],
                 'קרטונים': qty['קרטונים'], 'פטריות': qty['פטריות'],
-                'החזרות': 0
+                'החזרות': qty.get('החזרות', 0)
             })
 
     return deliveries
