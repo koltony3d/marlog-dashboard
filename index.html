@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>סיכום שנתי מרלו"ג</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { font-family: 'Heebo', 'Segoe UI', sans-serif; }
+  body { background: #f0f2f5; direction: rtl; }
+  .tab-btn { transition: all .18s; }
+  .tab-btn.active { background:#0f3460; color:#fff; border-color:#0f3460; }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+  .kpi-card { border-top: 4px solid; }
+  .num { font-variant-numeric: tabular-nums; }
+  table { border-collapse: collapse; }
+  th, td { text-align: start; }
+  tr:hover td { background: #f8faff; }
+  .sort-btn { cursor: pointer; user-select: none; }
+  .sort-btn:hover { color: #0f3460; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: #c0cde0; border-radius: 3px; }
+  .chart-container { position: relative; }
+  .fade-in { animation: fadeIn .3s ease; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+  select, input { direction: rtl; }
+  .filter-bar select { background-image: none; }
+  @media(max-width:640px) {
+    .kpi-grid { grid-template-columns: repeat(2,1fr) !important; }
+    .tabs-nav { overflow-x:auto; flex-wrap:nowrap; }
+  }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Header -->
+<header class="bg-gradient-to-l from-[#1a1a2e] to-[#0f3460] text-white px-6 py-4 shadow-lg sticky top-0 z-50">
+  <div class="max-w-screen-xl mx-auto flex items-center justify-between gap-4 flex-wrap">
+    <div>
+      <h1 class="text-xl font-bold">סיכום שנתי מרלו"ג</h1>
+      <p class="text-xs opacity-70 mt-0.5" id="dataInfo">טוען נתונים...</p>
+    </div>
+    <div class="flex items-center gap-3 flex-wrap">
+      <select id="yearFilter" class="bg-white/10 border border-white/30 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/50">
+        <option value="all">כל השנים</option>
+      </select>
+      <select id="monthFilter" class="bg-white/10 border border-white/30 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/50">
+        <option value="all">כל החודשים</option>
+        <option value="1">ינואר</option><option value="2">פברואר</option>
+        <option value="3">מרס</option><option value="4">אפריל</option>
+        <option value="5">מאי</option><option value="6">יוני</option>
+        <option value="7">יולי</option><option value="8">אוגוסט</option>
+        <option value="9">ספטמבר</option><option value="10">אוקטובר</option>
+        <option value="11">נובמבר</option><option value="12">דצמבר</option>
+      </select>
+      <button onclick="exportCSV()" class="bg-[#e94560] hover:bg-[#c73652] text-white px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors">
+        ייצוא CSV
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- Tabs -->
+<nav class="bg-white border-b-2 border-gray-200 shadow-sm sticky top-[68px] z-40">
+  <div class="max-w-screen-xl mx-auto px-4 flex gap-1 tabs-nav overflow-x-auto">
+    <button class="tab-btn active border-2 border-transparent rounded-t-lg px-4 py-3 text-sm font-semibold text-gray-600 whitespace-nowrap" onclick="showTab('summary',this)">📊 סיכום שנתי</button>
+    <button class="tab-btn border-2 border-transparent rounded-t-lg px-4 py-3 text-sm font-semibold text-gray-600 whitespace-nowrap" onclick="showTab('driver',this)">🚚 לפי נהג / משאית</button>
+    <button class="tab-btn border-2 border-transparent rounded-t-lg px-4 py-3 text-sm font-semibold text-gray-600 whitespace-nowrap" onclick="showTab('branch',this)">🏪 לפי סניף</button>
+    <button class="tab-btn border-2 border-transparent rounded-t-lg px-4 py-3 text-sm font-semibold text-gray-600 whitespace-nowrap" onclick="showTab('days',this)">📅 ימי נסיעה</button>
+    <button class="tab-btn border-2 border-transparent rounded-t-lg px-4 py-3 text-sm font-semibold text-gray-600 whitespace-nowrap" onclick="showTab('cartons',this)">📦 קרטונים</button>
+    <button class="tab-btn border-2 border-transparent rounded-t-lg px-4 py-3 text-sm font-semibold text-gray-600 whitespace-nowrap" onclick="showTab('returns',this)">↩️ החזרות</button>
+  </div>
+</nav>
+
+<main class="max-w-screen-xl mx-auto px-4 py-5">
+
+<!-- ===== TAB 1: סיכום שנתי ===== -->
+<div id="tab-summary" class="tab-content active fade-in">
+  <div class="kpi-grid grid grid-cols-5 gap-4 mb-6" style="grid-template-columns:repeat(5,1fr)">
+    <div class="kpi-card bg-white rounded-xl p-4 shadow-sm text-center" style="border-top-color:#0f3460">
+      <div class="text-xs text-gray-500 mb-1">סה"כ יבש</div>
+      <div class="text-2xl font-bold text-[#0f3460] num" id="kpi-yavesh">—</div>
+      <div class="text-xs text-gray-400 mt-1">משטחים</div>
+    </div>
+    <div class="kpi-card bg-white rounded-xl p-4 shadow-sm text-center" style="border-top-color:#2ecc71">
+      <div class="text-xs text-gray-500 mb-1">סה"כ בצק</div>
+      <div class="text-2xl font-bold text-green-600 num" id="kpi-batzek">—</div>
+      <div class="text-xs text-gray-400 mt-1">משטחים</div>
+    </div>
+    <div class="kpi-card bg-white rounded-xl p-4 shadow-sm text-center" style="border-top-color:#f39c12">
+      <div class="text-xs text-gray-500 mb-1">סה"כ קרטונים</div>
+      <div class="text-2xl font-bold text-amber-600 num" id="kpi-cartons">—</div>
+      <div class="text-xs text-gray-400 mt-1">יחידות</div>
+    </div>
+    <div class="kpi-card bg-white rounded-xl p-4 shadow-sm text-center" style="border-top-color:#9b59b6">
+      <div class="text-xs text-gray-500 mb-1">סה"כ פטריות</div>
+      <div class="text-2xl font-bold text-purple-600 num" id="kpi-mushrooms">—</div>
+      <div class="text-xs text-gray-400 mt-1">יחידות</div>
+    </div>
+    <div class="kpi-card bg-white rounded-xl p-4 shadow-sm text-center" style="border-top-color:#e94560">
+      <div class="text-xs text-gray-500 mb-1">ימי נסיעה</div>
+      <div class="text-2xl font-bold text-[#e94560] num" id="kpi-days">—</div>
+      <div class="text-xs text-gray-400 mt-1">סה"כ נהגים</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">מגמה חודשית — משטחים</h3>
+      <div class="chart-container" style="height:260px"><canvas id="chartMonthly"></canvas></div>
+    </div>
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">חלוקה לפי נהג</h3>
+      <div class="chart-container" style="height:260px"><canvas id="chartDriverPie"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">חלוקה לפי אזור</h3>
+      <div class="chart-container" style="height:240px"><canvas id="chartArea"></canvas></div>
+    </div>
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">פעילות לפי יום שבוע</h3>
+      <div class="chart-container" style="height:240px"><canvas id="chartDayOfWeek"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB 2: לפי נהג ===== -->
+<div id="tab-driver" class="tab-content fade-in">
+  <div class="bg-white rounded-xl p-5 shadow-sm mb-5">
+    <div class="flex items-center justify-between mb-4 pb-2 border-b">
+      <h3 class="font-bold text-[#1a1a2e]">סיכום לפי נהג / משאית</h3>
+      <div class="flex items-center gap-2 filter-bar">
+        <label class="text-xs text-gray-500">מדד:</label>
+        <select id="driverMetric" onchange="renderDriverTab()" class="border border-gray-300 rounded-lg px-2 py-1 text-sm">
+          <option value="total">סה"כ משטחים</option>
+          <option value="יבש">יבש</option>
+          <option value="בצק">בצק</option>
+          <option value="קרטונים">קרטונים</option>
+          <option value="days">ימי עבודה</option>
+        </select>
+      </div>
+    </div>
+    <div class="chart-container mb-5" style="height:240px"><canvas id="chartDriverBar"></canvas></div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm" id="tableDriver">
+        <thead>
+          <tr class="bg-[#f0f4ff]">
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">נהג</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center"><span dir="ltr">רישוי</span></th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center sort-btn" onclick="sortTable('tableDriver',2)">ימי עבודה ↕</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center sort-btn" onclick="sortTable('tableDriver',3)">סניפים ↕</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center sort-btn" onclick="sortTable('tableDriver',4)">יבש ↕</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center sort-btn" onclick="sortTable('tableDriver',5)">בצק ↕</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center sort-btn" onclick="sortTable('tableDriver',6)">סה"כ משטחים ↕</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center sort-btn" onclick="sortTable('tableDriver',7)">קרטונים ↕</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center sort-btn" onclick="sortTable('tableDriver',8)">פטריות ↕</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">החזרות</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyDriver"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB 3: לפי סניף ===== -->
+<div id="tab-branch" class="tab-content fade-in">
+  <div class="bg-white rounded-xl p-5 shadow-sm mb-5">
+    <div class="flex items-center justify-between mb-4 pb-2 border-b flex-wrap gap-3">
+      <h3 class="font-bold text-[#1a1a2e]">סיכום לפי סניף</h3>
+      <div class="flex items-center gap-3 filter-bar flex-wrap">
+        <select id="branchAreaFilter" onchange="renderBranchTab()" class="border border-gray-300 rounded-lg px-2 py-1 text-sm">
+          <option value="all">כל האזורים</option>
+          <option value="מרכז">מרכז</option>
+          <option value="צפון">צפון</option>
+          <option value="דרום">דרום</option>
+          <option value="ירושלים">ירושלים</option>
+        </select>
+        <select id="branchDriverFilter" onchange="renderBranchTab()" class="border border-gray-300 rounded-lg px-2 py-1 text-sm">
+          <option value="all">כל הנהגים</option>
+        </select>
+        <input type="text" id="branchSearch" oninput="renderBranchTab()" placeholder="חיפוש סניף..." class="border border-gray-300 rounded-lg px-3 py-1 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-[#0f3460]">
+      </div>
+    </div>
+    <div class="chart-container mb-5" style="height:280px"><canvas id="chartTopBranches"></canvas></div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm" id="tableBranch">
+        <thead>
+          <tr class="bg-[#f0f4ff]">
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] sort-btn" onclick="sortTable('tableBranch',0)">מספר ↕</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">שם סניף</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">אזור</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center sort-btn" onclick="sortTable('tableBranch',3)">יבש ↕</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center sort-btn" onclick="sortTable('tableBranch',4)">בצק ↕</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center sort-btn" onclick="sortTable('tableBranch',5)">סה"כ משטחים ↕</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center sort-btn" onclick="sortTable('tableBranch',6)">קרטונים ↕</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">פטריות</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">נהג עיקרי</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">ביקורים</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyBranch"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB 4: ימי נסיעה ===== -->
+<div id="tab-days" class="tab-content fade-in">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">ימי עבודה לפי נהג — חודשי</h3>
+      <div class="chart-container" style="height:280px"><canvas id="chartDaysDriver"></canvas></div>
+    </div>
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">סה"כ ימי עבודה לפי נהג</h3>
+      <div id="driverDaysSummary"></div>
+    </div>
+  </div>
+  <div class="bg-white rounded-xl p-5 shadow-sm">
+    <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">פירוט ימי עבודה לפי שבוע</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm" id="tableDays">
+        <thead><tr id="tableDaysHead" class="bg-[#f0f4ff]"></tr></thead>
+        <tbody id="tbodyDays"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB 5: קרטונים ===== -->
+<div id="tab-cartons" class="tab-content fade-in">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">קרטונים חודשי</h3>
+      <div class="chart-container" style="height:260px"><canvas id="chartCartonsMonthly"></canvas></div>
+    </div>
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">קרטונים לפי נהג</h3>
+      <div class="chart-container" style="height:260px"><canvas id="chartCartonsDriver"></canvas></div>
+    </div>
+  </div>
+  <div class="bg-white rounded-xl p-5 shadow-sm">
+    <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">טופ 25 סניפים — קרטונים</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-[#f0f4ff]">
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">#</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">סניף</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">אזור</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">סה"כ קרטונים</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">ממוצע/ביקור</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">ביקורים</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyCartons"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB 6: החזרות ===== -->
+<div id="tab-returns" class="tab-content fade-in">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">החזרות לפי נהג</h3>
+      <div class="chart-container" style="height:260px"><canvas id="chartReturnsDriver"></canvas></div>
+    </div>
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">החזרות חודשי</h3>
+      <div class="chart-container" style="height:260px"><canvas id="chartReturnsMonthly"></canvas></div>
+    </div>
+  </div>
+  <div class="bg-white rounded-xl p-5 shadow-sm">
+    <div class="flex items-center justify-between mb-4 pb-2 border-b">
+      <h3 class="font-bold text-[#1a1a2e]">פירוט החזרות — נהג / סניף</h3>
+    </div>
+    <div id="returnsNote" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 text-sm text-amber-800">
+      ℹ️ אין נתוני החזרות בקבצים. הוסף עמודת <strong>החזרות</strong> לגיליון היומי כדי לעקוב.
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-[#f0f4ff]">
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">נהג</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">סניף</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">החזרות</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">סה"כ משטחים</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">% החזרה</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyReturns"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+// ─────────────────────────────────────────────────────
+// DATA LAYER
+// ─────────────────────────────────────────────────────
+const DRIVERS = [
+  {license:"74898202", name:"ערן"},
+  {license:"40110003", name:"תאמר"},
+  {license:"41895402", name:"עלי"},
+  {license:"74902002", name:"נור"},
+  {license:"79085902", name:"יניב"}
+];
+
+const BRANCHES = [
+  {num:101,name:"יד אליהו",area:"מרכז",days:["שלישי"]},
+  {num:102,name:"נתניה",area:"מרכז",days:["ראשון","רביעי"]},
+  {num:103,name:"גבעתיים",area:"מרכז",days:["שלישי","חמישי"]},
+  {num:105,name:"מלחה",area:"ירושלים",days:["שני","שלישי"]},
+  {num:106,name:"חולון מזרח",area:"מרכז",days:["שני"]},
+  {num:107,name:"ת.מרכזית",area:"מרכז",days:["שני"]},
+  {num:108,name:"רמת השרון",area:"מרכז",days:["שלישי"]},
+  {num:109,name:"יוקנעם",area:"צפון",days:["חמישי"]},
+  {num:110,name:"מגדל",area:"צפון",days:["שני"]},
+  {num:111,name:"בילו",area:"מרכז",days:["רביעי"]},
+  {num:112,name:"שועפט",area:"ירושלים",days:["חמישי"]},
+  {num:113,name:"הרצליה",area:"מרכז",days:["ראשון"]},
+  {num:114,name:"אילת",area:"דרום",days:["שלישי"]},
+  {num:115,name:"מוריה",area:"צפון",days:["ראשון"]},
+  {num:118,name:"תלפיות",area:"ירושלים",days:["שלישי","חמישי"]},
+  {num:119,name:"רמות בש",area:"דרום",days:["שני","חמישי"]},
+  {num:120,name:"שדרות",area:"דרום",days:["שני","חמישי"]},
+  {num:121,name:"מרום נווה",area:"מרכז",days:["שלישי"]},
+  {num:122,name:"גבעת שמואל",area:"מרכז",days:["ראשון"]},
+  {num:123,name:"קרית אתא",area:"צפון",days:["ראשון","רביעי"]},
+  {num:124,name:"בת ים",area:"מרכז",days:["ראשון","שלישי"]},
+  {num:126,name:"מבשרת",area:"ירושלים",days:["שני"]},
+  {num:128,name:"קינג גורג",area:"ירושלים",days:["שלישי","חמישי"]},
+  {num:130,name:"פרדס חנה",area:"צפון",days:["חמישי"]},
+  {num:131,name:"טכניון",area:"צפון",days:["ראשון"]},
+  {num:132,name:"רמת אביב",area:"מרכז",days:["שלישי"]},
+  {num:133,name:"עכו",area:"צפון",days:["ראשון"]},
+  {num:135,name:"טבריה",area:"צפון",days:["שני","חמישי"]},
+  {num:136,name:"רעננה",area:"מרכז",days:["ראשון"]},
+  {num:137,name:"זכרון",area:"צפון",days:["חמישי"]},
+  {num:139,name:"דימונה",area:"דרום",days:["שני"]},
+  {num:140,name:"סירקין",area:"מרכז",days:["ראשון","רביעי"]},
+  {num:141,name:"רמות ים",area:"ירושלים",days:["שלישי"]},
+  {num:142,name:"מעלה אדומים",area:"ירושלים",days:["חמישי"]},
+  {num:143,name:"ירכא",area:"צפון",days:["רביעי"]},
+  {num:144,name:"שוהם",area:"מרכז",days:["ראשון"]},
+  {num:146,name:"פולג",area:"מרכז",days:["רביעי"]},
+  {num:147,name:"אביסרור",area:"מרכז",days:["שני","חמישי"]},
+  {num:148,name:"רמת ישי",area:"צפון",days:["חמישי"]},
+  {num:149,name:"מושבה",area:"צפון",days:["ראשון","רביעי"]},
+  {num:150,name:"נס ציונה",area:"מרכז",days:["ראשון","רביעי"]},
+  {num:151,name:"אורות",area:"מרכז",days:["שני"]},
+  {num:152,name:"גדרה",area:"מרכז",days:["רביעי"]},
+  {num:153,name:"נהריה",area:"צפון",days:["ראשון","רביעי"]},
+  {num:154,name:"באר שבע",area:"דרום",days:["שני","חמישי"]},
+  {num:155,name:"כפר סבא",area:"מרכז",days:["ראשון"]},
+  {num:156,name:"סכנין",area:"צפון",days:["רביעי"]},
+  {num:157,name:"ניות",area:"ירושלים",days:["שני","שלישי","חמישי"]},
+  {num:158,name:"חדרה",area:"צפון",days:["שני","חמישי"]},
+  {num:159,name:"ראשון מערב",area:"מרכז",days:["שני","חמישי"]},
+  {num:160,name:"אום אל פחם",area:"צפון",days:["שני"]},
+  {num:161,name:"גני תקווה",area:"מרכז",days:["ראשון","רביעי"]},
+  {num:162,name:"חולון מערב",area:"מרכז",days:["שני","חמישי"]},
+  {num:163,name:"ראש העין",area:"מרכז",days:["ראשון"]},
+  {num:164,name:"אילת קניון",area:"דרום",days:["שלישי"]},
+  {num:165,name:"באר יעקב",area:"מרכז",days:["שלישי"]},
+  {num:166,name:"רחובות",area:"מרכז",days:["ראשון","רביעי"]},
+  {num:167,name:"טירה",area:"מרכז",days:["שלישי"]},
+  {num:168,name:"קרית מוצקין",area:"צפון",days:["רביעי"]},
+  {num:169,name:"עפולה",area:"צפון",days:["שני"]},
+  {num:170,name:"קרית גת",area:"דרום",days:["שני","חמישי"]},
+  {num:171,name:"פסגת זאב",area:"ירושלים",days:["שלישי","חמישי"]},
+  {num:173,name:"דליה",area:"צפון",days:["חמישי"]},
+  {num:174,name:"אשדוד סיטי",area:"מרכז",days:["ראשון","רביעי"]},
+  {num:175,name:"נצרת",area:"צפון",days:["חמישי"]},
+  {num:176,name:"מעלות",area:"צפון",days:["ראשון"]},
+  {num:177,name:"בית שאן",area:"צפון",days:["שני"]},
+  {num:178,name:"כרמיאל",area:"צפון",days:["רביעי"]},
+  {num:179,name:"רמלוד",area:"מרכז",days:["רביעי"]},
+  {num:180,name:"בן הילל",area:"מרכז",days:["שני","חמישי"]},
+  {num:181,name:"דרורים",area:"מרכז",days:["רביעי"]},
+  {num:182,name:"בני ברק",area:"מרכז",days:["שלישי"]},
+  {num:183,name:"קרית שמונה",area:"צפון",days:["שני"]},
+  {num:184,name:"בית שמש",area:"ירושלים",days:["שני","חמישי"]},
+  {num:185,name:"רמת החייל",area:"מרכז",days:["שלישי"]},
+  {num:186,name:"אשקלון",area:"דרום",days:["שני","חמישי"]},
+  {num:187,name:"ראשון מזרח",area:"מרכז",days:["חמישי"]},
+  {num:188,name:"רהט",area:"דרום",days:["חמישי"]},
+  {num:189,name:"נתיבות",area:"דרום",days:["חמישי"]},
+  {num:190,name:"מצפה רמון",area:"דרום",days:["שלישי"]},
+  {num:191,name:"יבנה",area:"מרכז",days:["רביעי"]},
+  {num:192,name:"מודיעין",area:"מרכז",days:["שני"]},
+  {num:193,name:"יהוד",area:"מרכז",days:["ראשון","רביעי"]},
+  {num:194,name:"ערד",area:"דרום",days:["שני"]},
+  {num:198,name:"הוד השרון",area:"מרכז",days:["ראשון"]},
+  {num:199,name:"פתח תקווה",area:"מרכז",days:["ראשון","רביעי"]},
+  {num:210,name:"כפר גנים",area:"מרכז",days:["ראשון","רביעי"]},
+  {num:213,name:"כפר מעאר",area:"צפון",days:["חמישי"]},
+  {num:214,name:"אופקים",area:"דרום",days:["חמישי"]},
+  {num:216,name:"כפר יונה",area:"מרכז",days:["ראשון"]},
+  {num:217,name:"שפרעם",area:"צפון",days:["רביעי"]},
+  {num:218,name:"חריש",area:"צפון",days:["חמישי"]},
+  {num:219,name:"פארק אדיסון",area:"צפון",days:["שני"]},
+  {num:222,name:"טירת הכרמל",area:"צפון",days:["רביעי"]},
+  {num:223,name:"ראש פינה",area:"צפון",days:["חמישי"]},
+  {num:225,name:"קרית מלאכי",area:"דרום",days:["חמישי"]},
+  {num:226,name:"כפר קרע",area:"צפון",days:["רביעי"]},
+  {num:227,name:"קרית יובל",area:"ירושלים",days:["שלישי"]},
+  {num:228,name:"מודיעין חדש",area:"מרכז",days:["חמישי"]},
+  {num:229,name:"ביתר עילית",area:"ירושלים",days:["חמישי"]},
+  {num:231,name:"רמלה",area:"מרכז",days:["שלישי"]}
+];
+
+const DAY_ORDER = ["ראשון","שני","שלישי","רביעי","חמישי"];
+const MONTH_NAMES = ["","ינואר","פברואר","מרס","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
+const COLORS = ["#0f3460","#e94560","#2ecc71","#f39c12","#9b59b6","#3498db","#e67e22","#1abc9c"];
+
+// ─────────────────────────────────────────────────────
+// SAMPLE DATA GENERATOR (seeded)
+// ─────────────────────────────────────────────────────
+function seeded(seed) {
+  let s = seed;
+  return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+}
+
+function generateSampleData() {
+  const rng = seeded(2026);
+  const deliveries = [];
+  // Branch→driver mapping: consistent per branch+day combo
+  const getDriver = (branchNum, dayIdx) => DRIVERS[(branchNum * 7 + dayIdx * 3) % DRIVERS.length];
+  // Week 1 starts Dec 28 2025
+  const w1 = new Date(2025, 11, 28);
+
+  for (let wk = 1; wk <= 13; wk++) {
+    const wStart = new Date(w1);
+    wStart.setDate(wStart.getDate() + (wk - 1) * 7);
+
+    for (let di = 0; di < 5; di++) {
+      const d = new Date(wStart); d.setDate(d.getDate() + di);
+      const dayName = DAY_ORDER[di];
+      const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(2)}`;
+      const month = d.getMonth() + 1;
+      const year = d.getFullYear();
+
+      BRANCHES.filter(b => b.days.includes(dayName)).forEach(br => {
+        const drv = getDriver(br.num, di);
+        // Realistic quantities based on branch+week variation
+        const base = 0.5 + 0.5 * Math.sin(wk * 0.4 + br.num * 0.1);
+        const יבש = Math.max(0, Math.round(1 + base * 2 + (rng() - 0.5)));
+        const בצק = Math.max(0, Math.round(base * 1.5 + (rng() - 0.5)));
+        const קרטונים = Math.max(0, Math.round(20 + base * 60 + rng() * 30));
+        const פטריות = rng() > 0.65 ? Math.round(rng() * 4 + 1) : 0;
+        const החזרות = rng() > 0.82 ? Math.round(rng() * 2 + 1) : 0;
+
+        deliveries.push({
+          week: wk, year, month, day: dayName, date: dateStr,
+          branch_num: br.num, branch_name: br.name, area: br.area,
+          driver_lic: drv.license, driver_name: drv.name,
+          יבש, בצק, קרטונים, פטריות, החזרות
+        });
+      });
+    }
+  }
+  return deliveries;
+}
+
+// ─────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────
+let ALL_DATA = [];
+let FILTERED = [];
+const charts = {};
+
+// ─────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────
+async function init() {
+  try {
+    const res = await fetch('data/data.json');
+    if (res.ok) { ALL_DATA = await res.json(); }
+    else throw new Error('no file');
+  } catch { ALL_DATA = generateSampleData(); }
+
+  const years = [...new Set(ALL_DATA.map(d => d.year))].sort();
+  const sel = document.getElementById('yearFilter');
+  years.forEach(y => { const o = document.createElement('option'); o.value=y; o.text=y+''; sel.appendChild(o); });
+
+  const weeks = [...new Set(ALL_DATA.map(d => d.week))].length;
+  document.getElementById('dataInfo').textContent =
+    `${ALL_DATA.length.toLocaleString('he-IL')} רשומות | ${weeks} שבועות | ${years.join('–')}`;
+
+  // Populate driver filter in branch tab
+  const drvSel = document.getElementById('branchDriverFilter');
+  DRIVERS.forEach(drv => {
+    const o = document.createElement('option');
+    o.value = drv.license; o.text = drv.name; drvSel.appendChild(o);
+  });
+
+  document.getElementById('yearFilter').onchange = applyFilters;
+  document.getElementById('monthFilter').onchange = applyFilters;
+  applyFilters();
+}
+
+function applyFilters() {
+  const yr = document.getElementById('yearFilter').value;
+  const mo = document.getElementById('monthFilter').value;
+  FILTERED = ALL_DATA.filter(d =>
+    (yr === 'all' || d.year == yr) &&
+    (mo === 'all' || d.month == mo)
+  );
+  renderAll();
+}
+
+function renderAll() {
+  renderSummaryTab();
+  renderDriverTab();
+  renderBranchTab();
+  renderDaysTab();
+  renderCartonsTab();
+  renderReturnsTab();
+}
+
+// ─────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────
+function n(v) { return (v||0).toLocaleString('he-IL'); }
+
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function makeChart(id, type, data, opts={}) {
+  destroyChart(id);
+  const ctx = document.getElementById(id).getContext('2d');
+  charts[id] = new Chart(ctx, { type, data, options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { position:'bottom', labels:{ font:{ family:'Heebo', size:11 } } } },
+    scales: type === 'pie' || type === 'doughnut' ? {} : {
+      x: { ticks: { font:{ family:'Heebo', size:11 } } },
+      y: { ticks: { font:{ family:'Heebo', size:11 } } }
+    },
+    ...opts
+  }});
+}
+
+function groupBy(arr, key) {
+  return arr.reduce((acc, d) => {
+    const k = typeof key === 'function' ? key(d) : d[key];
+    if (!acc[k]) acc[k] = [];
+    acc[k].push(d); return acc;
+  }, {});
+}
+
+function sumField(arr, field) { return arr.reduce((s, d) => s + (d[field]||0), 0); }
+
+// ─────────────────────────────────────────────────────
+// TAB 1: SUMMARY
+// ─────────────────────────────────────────────────────
+function renderSummaryTab() {
+  const data = FILTERED;
+  const yavesh = sumField(data,'יבש'), batzek = sumField(data,'בצק');
+  document.getElementById('kpi-yavesh').textContent = n(yavesh);
+  document.getElementById('kpi-batzek').textContent = n(batzek);
+  document.getElementById('kpi-cartons').textContent = n(sumField(data,'קרטונים'));
+  document.getElementById('kpi-mushrooms').textContent = n(sumField(data,'פטריות'));
+
+  // Driving days = unique driver+date combos
+  const driverDays = new Set(data.map(d => d.driver_lic + '|' + d.date));
+  document.getElementById('kpi-days').textContent = n(driverDays.size);
+
+  // Monthly trend
+  const byMonth = groupBy(data, 'month');
+  const months = Object.keys(byMonth).map(Number).sort((a,b)=>a-b);
+  makeChart('chartMonthly', 'line', {
+    labels: months.map(m => MONTH_NAMES[m]),
+    datasets: [
+      { label:'יבש', data: months.map(m => sumField(byMonth[m],'יבש')), borderColor:'#0f3460', backgroundColor:'#0f346020', fill:true, tension:.4 },
+      { label:'בצק', data: months.map(m => sumField(byMonth[m],'בצק')), borderColor:'#2ecc71', backgroundColor:'#2ecc7120', fill:true, tension:.4 }
+    ]
+  });
+
+  // Driver pie
+  const byDriver = groupBy(data, 'driver_name');
+  const driverNames = Object.keys(byDriver);
+  makeChart('chartDriverPie', 'doughnut', {
+    labels: driverNames,
+    datasets: [{ data: driverNames.map(nm => sumField(byDriver[nm],'יבש') + sumField(byDriver[nm],'בצק')),
+      backgroundColor: COLORS }]
+  });
+
+  // Area bar
+  const byArea = groupBy(data, 'area');
+  const areas = Object.keys(byArea).sort();
+  makeChart('chartArea', 'bar', {
+    labels: areas,
+    datasets: [
+      { label:'יבש', data: areas.map(a => sumField(byArea[a],'יבש')), backgroundColor:'#0f3460' },
+      { label:'בצק', data: areas.map(a => sumField(byArea[a],'בצק')), backgroundColor:'#2ecc71' }
+    ]
+  }, { scales:{ x:{ stacked:true, ticks:{font:{family:'Heebo',size:11}} }, y:{ stacked:true, ticks:{font:{family:'Heebo',size:11}} } } });
+
+  // Day of week
+  const byDay = groupBy(data, 'day');
+  makeChart('chartDayOfWeek', 'bar', {
+    labels: DAY_ORDER.filter(d => byDay[d]),
+    datasets: [
+      { label:'יבש', data: DAY_ORDER.filter(d=>byDay[d]).map(d=>sumField(byDay[d],'יבש')), backgroundColor:'#0f3460' },
+      { label:'בצק', data: DAY_ORDER.filter(d=>byDay[d]).map(d=>sumField(byDay[d],'בצק')), backgroundColor:'#e94560' },
+      { label:'קרטונים', data: DAY_ORDER.filter(d=>byDay[d]).map(d=>sumField(byDay[d],'קרטונים')/10|0), backgroundColor:'#f39c12', yAxisID:'y1' }
+    ]
+  }, { scales:{ x:{ticks:{font:{family:'Heebo',size:11}}}, y:{ticks:{font:{family:'Heebo',size:11}}}, y1:{type:'linear',position:'left',ticks:{font:{family:'Heebo',size:11}}, grid:{display:false}} } });
+}
+
+// ─────────────────────────────────────────────────────
+// TAB 2: DRIVER
+// ─────────────────────────────────────────────────────
+function renderDriverTab() {
+  const data = FILTERED;
+  const metric = document.getElementById('driverMetric').value;
+  const byDriver = groupBy(data, 'driver_lic');
+
+  const rows = DRIVERS.map(drv => {
+    const recs = byDriver[drv.license] || [];
+    const days = new Set(recs.map(r => r.date)).size;
+    const branches = new Set(recs.map(r => r.branch_num)).size;
+    const יבש = sumField(recs,'יבש'), בצק = sumField(recs,'בצק');
+    const קרטונים = sumField(recs,'קרטונים');
+    const פטריות = sumField(recs,'פטריות');
+    const החזרות = sumField(recs,'החזרות');
+    return { drv, days, branches, יבש, בצק, total:יבש+בצק, קרטונים, פטריות, החזרות };
+  });
+
+  const metricVals = { total: r=>r.total, יבש: r=>r.יבש, בצק: r=>r.בצק, קרטונים: r=>r.קרטונים, days: r=>r.days };
+  const metricFn = metricVals[metric] || (r=>r.total);
+  const metricLabel = { total:'סה"כ משטחים', יבש:'יבש', בצק:'בצק', קרטונים:'קרטונים', days:'ימי עבודה' };
+
+  makeChart('chartDriverBar', 'bar', {
+    labels: rows.map(r => r.drv.name),
+    datasets: [{ label: metricLabel[metric], data: rows.map(metricFn),
+      backgroundColor: COLORS.slice(0, rows.length) }]
+  }, { plugins:{ legend:{display:false} } });
+
+  const tbody = document.getElementById('tbodyDriver');
+  tbody.innerHTML = rows.map((r,i) => `
+    <tr class="${i%2?'bg-gray-50':''}">
+      <td class="px-3 py-2 font-semibold text-[#0f3460]">${r.drv.name}</td>
+      <td class="px-3 py-2 text-center text-gray-400 text-xs num"><span dir="ltr">${r.drv.license}</span></td>
+      <td class="px-3 py-2 text-center num font-medium">${n(r.days)}</td>
+      <td class="px-3 py-2 text-center num">${n(r.branches)}</td>
+      <td class="px-3 py-2 text-center num">${n(r.יבש)}</td>
+      <td class="px-3 py-2 text-center num">${n(r.בצק)}</td>
+      <td class="px-3 py-2 text-center num font-bold text-[#0f3460]">${n(r.total)}</td>
+      <td class="px-3 py-2 text-center num text-amber-700">${n(r.קרטונים)}</td>
+      <td class="px-3 py-2 text-center num text-purple-600">${n(r.פטריות)}</td>
+      <td class="px-3 py-2 text-center num ${r.החזרות>0?'text-[#e94560] font-semibold':''}">${n(r.החזרות)}</td>
+    </tr>
+  `).join('') + `
+    <tr class="bg-[#f0f4ff] font-bold text-[#0f3460]">
+      <td class="px-3 py-2" colspan="2">סה"כ</td>
+      <td class="px-3 py-2 text-center num">${n(rows.reduce((s,r)=>s+r.days,0))}</td>
+      <td class="px-3 py-2 text-center num"></td>
+      <td class="px-3 py-2 text-center num">${n(rows.reduce((s,r)=>s+r.יבש,0))}</td>
+      <td class="px-3 py-2 text-center num">${n(rows.reduce((s,r)=>s+r.בצק,0))}</td>
+      <td class="px-3 py-2 text-center num">${n(rows.reduce((s,r)=>s+r.total,0))}</td>
+      <td class="px-3 py-2 text-center num">${n(rows.reduce((s,r)=>s+r.קרטונים,0))}</td>
+      <td class="px-3 py-2 text-center num">${n(rows.reduce((s,r)=>s+r.פטריות,0))}</td>
+      <td class="px-3 py-2 text-center num">${n(rows.reduce((s,r)=>s+r.החזרות,0))}</td>
+    </tr>`;
+}
+
+// ─────────────────────────────────────────────────────
+// TAB 3: BRANCH
+// ─────────────────────────────────────────────────────
+function renderBranchTab() {
+  const area = document.getElementById('branchAreaFilter').value;
+  const drv = document.getElementById('branchDriverFilter').value;
+  const search = document.getElementById('branchSearch').value.trim().toLowerCase();
+
+  let data = FILTERED;
+  if (area !== 'all') data = data.filter(d => d.area === area);
+  if (drv !== 'all') data = data.filter(d => d.driver_lic === drv);
+  if (search) data = data.filter(d => d.branch_name.includes(search) || String(d.branch_num).includes(search));
+
+  const byBranch = groupBy(data, 'branch_num');
+  const branchList = Object.keys(byBranch).map(num => {
+    const recs = byBranch[num];
+    const יבש = sumField(recs,'יבש'), בצק = sumField(recs,'בצק');
+    // Most frequent driver
+    const drvMap = {};
+    recs.forEach(r => drvMap[r.driver_name] = (drvMap[r.driver_name]||0)+1);
+    const mainDrv = Object.keys(drvMap).sort((a,b)=>drvMap[b]-drvMap[a])[0] || '—';
+    return {
+      num: parseInt(num), name: recs[0].branch_name, area: recs[0].area,
+      יבש, בצק, total: יבש+בצק,
+      קרטונים: sumField(recs,'קרטונים'),
+      פטריות: sumField(recs,'פטריות'),
+      mainDrv, visits: recs.length
+    };
+  }).sort((a,b) => b.total - a.total);
+
+  // Top 15 chart
+  const top15 = branchList.slice(0, 15);
+  makeChart('chartTopBranches', 'bar', {
+    labels: top15.map(b => b.name),
+    datasets: [
+      { label:'יבש', data: top15.map(b=>b.יבש), backgroundColor:'#0f3460' },
+      { label:'בצק', data: top15.map(b=>b.בצק), backgroundColor:'#2ecc71' }
+    ]
+  }, { indexAxis:'y', scales:{ x:{stacked:true,ticks:{font:{family:'Heebo',size:10}}}, y:{stacked:true,ticks:{font:{family:'Heebo',size:11}}} } });
+
+  const areaColors = { מרכז:'#0f3460', צפון:'#2ecc71', דרום:'#e94560', ירושלים:'#f39c12' };
+  document.getElementById('tbodyBranch').innerHTML = branchList.map((b,i) => `
+    <tr class="${i%2?'bg-gray-50':''}">
+      <td class="px-3 py-2 text-center num text-gray-400 text-xs"><span dir="ltr">${b.num}</span></td>
+      <td class="px-3 py-2 font-medium">${b.name}</td>
+      <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold text-white" style="background:${areaColors[b.area]||'#888'}">${b.area}</span></td>
+      <td class="px-3 py-2 text-center num">${n(b.יבש)}</td>
+      <td class="px-3 py-2 text-center num">${n(b.בצק)}</td>
+      <td class="px-3 py-2 text-center num font-bold text-[#0f3460]">${n(b.total)}</td>
+      <td class="px-3 py-2 text-center num text-amber-700">${n(b.קרטונים)}</td>
+      <td class="px-3 py-2 text-center num text-purple-600">${n(b.פטריות)}</td>
+      <td class="px-3 py-2 text-sm text-gray-600">${b.mainDrv}</td>
+      <td class="px-3 py-2 text-center num text-xs text-gray-400">${b.visits}</td>
+    </tr>`).join('');
+}
+
+// ─────────────────────────────────────────────────────
+// TAB 4: DRIVING DAYS
+// ─────────────────────────────────────────────────────
+function renderDaysTab() {
+  const data = FILTERED;
+
+  // Monthly days per driver
+  const byMonth = groupBy(data, 'month');
+  const months = Object.keys(byMonth).map(Number).sort((a,b)=>a-b);
+
+  makeChart('chartDaysDriver', 'bar', {
+    labels: months.map(m => MONTH_NAMES[m]),
+    datasets: DRIVERS.map((drv, i) => ({
+      label: drv.name,
+      data: months.map(m => {
+        const recs = (byMonth[m]||[]).filter(d => d.driver_lic === drv.license);
+        return new Set(recs.map(d => d.date)).size;
+      }),
+      backgroundColor: COLORS[i]
+    }))
+  }, { scales:{ x:{stacked:true,ticks:{font:{family:'Heebo',size:11}}}, y:{stacked:true,ticks:{font:{family:'Heebo',size:11}}} } });
+
+  // Driver summary cards
+  document.getElementById('driverDaysSummary').innerHTML = DRIVERS.map((drv,i) => {
+    const recs = data.filter(d => d.driver_lic === drv.license);
+    const days = new Set(recs.map(d => d.date)).size;
+    const byDay = groupBy(recs, 'day');
+    const topDay = DAY_ORDER.reduce((best, d) => {
+      const cnt = new Set((byDay[d]||[]).map(r=>r.date)).size;
+      return cnt > (best.cnt||0) ? {day:d, cnt} : best;
+    }, {}).day || '—';
+    return `
+      <div class="flex items-center gap-3 py-3 border-b last:border-0">
+        <div class="w-2 h-8 rounded-full flex-shrink-0" style="background:${COLORS[i]}"></div>
+        <div class="flex-1">
+          <div class="font-semibold text-[#1a1a2e]">${drv.name}</div>
+          <div class="text-xs text-gray-400"><span dir="ltr">${drv.license}</span> — יום עיקרי: ${topDay}</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold num" style="color:${COLORS[i]}">${n(days)}</div>
+          <div class="text-xs text-gray-400">ימים</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Weekly table
+  const allWeeks = [...new Set(data.map(d => d.week))].sort((a,b)=>a-b);
+  const head = document.getElementById('tableDaysHead');
+  head.innerHTML = `<th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">נהג</th>` +
+    allWeeks.map(w => `<th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center text-xs">ש${w}</th>`).join('') +
+    `<th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">סה"כ</th>`;
+
+  document.getElementById('tbodyDays').innerHTML = DRIVERS.map((drv,i) => {
+    const recs = data.filter(d => d.driver_lic === drv.license);
+    const byWeek = groupBy(recs, 'week');
+    const total = new Set(recs.map(d=>d.date)).size;
+    return `<tr class="${i%2?'bg-gray-50':''}">
+      <td class="px-3 py-2 font-semibold" style="color:${COLORS[i]}">${drv.name}</td>
+      ${allWeeks.map(w => {
+        const wRecs = byWeek[w] || [];
+        const cnt = new Set(wRecs.map(d=>d.date)).size;
+        return `<td class="px-3 py-2 text-center text-xs num ${cnt===5?'font-bold text-green-700':cnt>0?'text-[#0f3460]':'text-gray-300'}">${cnt||'·'}</td>`;
+      }).join('')}
+      <td class="px-3 py-2 text-center num font-bold text-[#0f3460]">${total}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────
+// TAB 5: CARTONS
+// ─────────────────────────────────────────────────────
+function renderCartonsTab() {
+  const data = FILTERED;
+
+  // Monthly cartons
+  const byMonth = groupBy(data, 'month');
+  const months = Object.keys(byMonth).map(Number).sort((a,b)=>a-b);
+  makeChart('chartCartonsMonthly', 'line', {
+    labels: months.map(m => MONTH_NAMES[m]),
+    datasets: [{ label:'קרטונים', data: months.map(m => sumField(byMonth[m],'קרטונים')),
+      borderColor:'#f39c12', backgroundColor:'#f39c1220', fill:true, tension:.4 }]
+  }, { plugins:{ legend:{display:false} } });
+
+  // By driver
+  makeChart('chartCartonsDriver', 'bar', {
+    labels: DRIVERS.map(d=>d.name),
+    datasets: [{ label:'קרטונים', data: DRIVERS.map(drv => sumField(data.filter(d=>d.driver_lic===drv.license),'קרטונים')),
+      backgroundColor: COLORS }]
+  }, { plugins:{ legend:{display:false} } });
+
+  // Top 25 branches
+  const byBranch = groupBy(data, 'branch_num');
+  const top25 = Object.keys(byBranch)
+    .map(num => ({ num:parseInt(num), name: byBranch[num][0].branch_name, area: byBranch[num][0].area,
+      total: sumField(byBranch[num],'קרטונים'), visits: byBranch[num].length }))
+    .sort((a,b) => b.total - a.total).slice(0,25);
+
+  document.getElementById('tbodyCartons').innerHTML = top25.map((b,i) => `
+    <tr class="${i%2?'bg-gray-50':''}">
+      <td class="px-3 py-2 text-center num text-gray-400 font-semibold">${i+1}</td>
+      <td class="px-3 py-2 font-medium">${b.name}</td>
+      <td class="px-3 py-2 text-sm text-gray-500">${b.area}</td>
+      <td class="px-3 py-2 text-center num font-bold text-amber-700">${n(b.total)}</td>
+      <td class="px-3 py-2 text-center num text-gray-600">${n(Math.round(b.total/b.visits))}</td>
+      <td class="px-3 py-2 text-center num text-xs text-gray-400">${b.visits}</td>
+    </tr>`).join('');
+}
+
+// ─────────────────────────────────────────────────────
+// TAB 6: RETURNS
+// ─────────────────────────────────────────────────────
+function renderReturnsTab() {
+  const data = FILTERED;
+  const hasReturns = data.some(d => d.החזרות > 0);
+
+  document.getElementById('returnsNote').classList.toggle('hidden', hasReturns);
+
+  // By driver
+  makeChart('chartReturnsDriver', 'bar', {
+    labels: DRIVERS.map(d=>d.name),
+    datasets: [{ label:'החזרות', data: DRIVERS.map(drv => sumField(data.filter(d=>d.driver_lic===drv.license),'החזרות')),
+      backgroundColor: '#e94560' }]
+  }, { plugins:{ legend:{display:false} } });
+
+  // Monthly
+  const byMonth = groupBy(data, 'month');
+  const months = Object.keys(byMonth).map(Number).sort((a,b)=>a-b);
+  makeChart('chartReturnsMonthly', 'line', {
+    labels: months.map(m => MONTH_NAMES[m]),
+    datasets: [{ label:'החזרות', data: months.map(m => sumField(byMonth[m],'החזרות')),
+      borderColor:'#e94560', backgroundColor:'#e9456020', fill:true, tension:.4 }]
+  }, { plugins:{ legend:{display:false} } });
+
+  // Detail table: driver+branch
+  const key = d => d.driver_name + '|' + d.branch_name;
+  const byKey = groupBy(data.filter(d=>d.החזרות>0), key);
+  const rows = Object.keys(byKey).map(k => {
+    const recs = byKey[k];
+    const returns = sumField(recs,'החזרות');
+    const total = sumField(recs,'יבש') + sumField(recs,'בצק');
+    return { driver: recs[0].driver_name, branch: recs[0].branch_name, returns, total,
+      pct: total > 0 ? Math.round(returns/total*100) : 0 };
+  }).sort((a,b) => b.returns - a.returns).slice(0, 50);
+
+  document.getElementById('tbodyReturns').innerHTML = rows.length ? rows.map((r,i) => `
+    <tr class="${i%2?'bg-gray-50':''}">
+      <td class="px-3 py-2 font-semibold text-[#0f3460]">${r.driver}</td>
+      <td class="px-3 py-2">${r.branch}</td>
+      <td class="px-3 py-2 text-center num font-bold text-[#e94560]">${n(r.returns)}</td>
+      <td class="px-3 py-2 text-center num">${n(r.total)}</td>
+      <td class="px-3 py-2 text-center">
+        <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${r.pct>20?'bg-red-100 text-red-700':r.pct>10?'bg-amber-100 text-amber-700':'bg-green-100 text-green-700'}">${r.pct}%</span>
+      </td>
+    </tr>`).join('') :
+    `<tr><td colspan="5" class="px-3 py-8 text-center text-gray-400">אין נתוני החזרות</td></tr>`;
+}
+
+// ─────────────────────────────────────────────────────
+// TAB SWITCHING
+// ─────────────────────────────────────────────────────
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ─────────────────────────────────────────────────────
+// TABLE SORT
+// ─────────────────────────────────────────────────────
+const sortState = {};
+function sortTable(tableId, colIdx) {
+  const tbl = document.getElementById(tableId);
+  const tbody = tbl.querySelector('tbody');
+  const rows = [...tbody.querySelectorAll('tr:not(.bg-\\[\\#f0f4ff\\])')];
+  sortState[tableId] = sortState[tableId] === colIdx ? -colIdx : colIdx;
+  const dir = sortState[tableId] > 0 ? 1 : -1;
+  rows.sort((a, b) => {
+    const av = a.cells[colIdx]?.textContent.replace(/,/g,'').trim() || '';
+    const bv = b.cells[colIdx]?.textContent.replace(/,/g,'').trim() || '';
+    const an = parseFloat(av), bn = parseFloat(bv);
+    if (!isNaN(an) && !isNaN(bn)) return dir * (an - bn);
+    return dir * av.localeCompare(bv, 'he');
+  });
+  rows.forEach(r => tbody.appendChild(r));
+}
+
+// ─────────────────────────────────────────────────────
+// CSV EXPORT
+// ─────────────────────────────────────────────────────
+function exportCSV() {
+  const headers = ['שבוע','שנה','חודש','יום','תאריך','מספר סניף','שם סניף','אזור','רישוי','נהג','יבש','בצק','קרטונים','פטריות','החזרות'];
+  const rows = FILTERED.map(d => [d.week,d.year,d.month,d.day,d.date,d.branch_num,d.branch_name,d.area,d.driver_lic,d.driver_name,d.יבש,d.בצק,d.קרטונים,d.פטריות,d.החזרות]);
+  const csv = '\uFEFF' + [headers, ...rows].map(r => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+  a.download = `מרלוג_${new Date().toLocaleDateString('he-IL').replace(/\//g,'-')}.csv`;
+  a.click();
+}
+
+init();
+</script>
+</body>
+</html>
