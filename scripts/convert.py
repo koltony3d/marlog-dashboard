@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+import sys, io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 """
 Convert weekly xlsx files → data/data.json for the annual logistics dashboard.
 
