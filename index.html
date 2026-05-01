@@ -289,8 +289,9 @@
       <table class="w-full text-sm">
         <thead>
           <tr class="bg-[#f0f4ff]">
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">תאריך</th>
             <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">נהג</th>
-            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">סניף</th>
+            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">סניפים</th>
             <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">החזרות</th>
             <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">סה"כ משטחים</th>
             <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">% החזרה</th>
@@ -477,7 +478,8 @@ function generateSampleData() {
 // STATE
 // ─────────────────────────────────────────────────────
 let ALL_DATA = [];
-let FILTERED = [];
+let FILTERED = [];        // כל הנתונים לפי פילטר שנה/חודש
+let SUMMARY_DATA = [];    // כמו FILTERED אבל ללא שבוע 1 דצמבר (לסיכום שנתי)
 const charts = {};
 
 // ─────────────────────────────────────────────────────
@@ -517,6 +519,8 @@ function applyFilters() {
     (yr === 'all' || d.year == yr) &&
     (mo === 'all' || d.month == mo)
   );
+  // סיכום שנתי: ללא שבוע 1 של דצמבר (28-31.12 שייכים לשנה הבאה)
+  SUMMARY_DATA = FILTERED.filter(d => !(d.week === 1 && d.month === 12));
   renderAll();
 }
 
@@ -564,7 +568,7 @@ function sumField(arr, field) { return arr.reduce((s, d) => s + (d[field]||0), 0
 // TAB 1: SUMMARY
 // ─────────────────────────────────────────────────────
 function renderSummaryTab() {
-  const data = FILTERED;
+  const data = SUMMARY_DATA; // ללא שבוע 1 דצמבר
   const yavesh = sumField(data,'יבש'), batzek = sumField(data,'בצק');
   document.getElementById('kpi-yavesh').textContent = n(yavesh);
   document.getElementById('kpi-batzek').textContent = n(batzek);
@@ -848,7 +852,7 @@ function renderReturnsTab() {
 
   document.getElementById('returnsNote').classList.toggle('hidden', hasReturns);
 
-  // By driver
+  // By driver (all drivers, even 0)
   makeChart('chartReturnsDriver', 'bar', {
     labels: DRIVERS.map(d=>d.name),
     datasets: [{ label:'החזרות', data: DRIVERS.map(drv => sumField(data.filter(d=>d.driver_lic===drv.license),'החזרות')),
@@ -864,28 +868,43 @@ function renderReturnsTab() {
       borderColor:'#e94560', backgroundColor:'#e9456020', fill:true, tension:.4 }]
   }, { plugins:{ legend:{display:false} } });
 
-  // Detail table: driver+branch
-  const key = d => d.driver_name + '|' + d.branch_name;
-  const byKey = groupBy(data.filter(d=>d.החזרות>0), key);
-  const rows = Object.keys(byKey).map(k => {
-    const recs = byKey[k];
-    const returns = sumField(recs,'החזרות');
-    const total = sumField(recs,'יבש') + sumField(recs,'בצק');
-    return { driver: recs[0].driver_name, branch: recs[0].branch_name, returns, total,
-      pct: total > 0 ? Math.round(returns/total*100) : 0 };
-  }).sort((a,b) => b.returns - a.returns).slice(0, 50);
+  // ── פירוט לפי תאריך × נהג — כל יום, כל נהג ──
+  // מקבץ לפי date+driver_lic
+  const byDateDrv = {};
+  data.forEach(d => {
+    const k = d.date + '|' + d.driver_lic;
+    if (!byDateDrv[k]) byDateDrv[k] = { date:d.date, driver:d.driver_name, lic:d.driver_lic, returns:0, יבש:0, בצק:0, branches:new Set() };
+    byDateDrv[k].returns  += (d.החזרות||0);
+    byDateDrv[k].יבש      += (d.יבש||0);
+    byDateDrv[k].בצק      += (d.בצק||0);
+    byDateDrv[k].branches.add(d.branch_num);
+  });
 
-  document.getElementById('tbodyReturns').innerHTML = rows.length ? rows.map((r,i) => `
+  // ממיין לפי תאריך (dd/mm/yy → yyyy-mm-dd) ואח"כ לפי נהג
+  const parseDate = s => { const [d,m,y] = s.split('/'); return `${y.length===2?'20'+y:y}-${m}-${d}`; };
+  const rows = Object.values(byDateDrv)
+    .sort((a,b) => parseDate(a.date).localeCompare(parseDate(b.date)) || a.driver.localeCompare(b.driver,'he'));
+
+  const driverColorMap = {};
+  DRIVERS.forEach((drv,i) => driverColorMap[drv.license] = COLORS[i]);
+
+  document.getElementById('tbodyReturns').innerHTML = rows.length ? rows.map((r,i) => {
+    const total = r.יבש + r.בצק;
+    const pct   = total > 0 ? Math.round(r.returns/total*100) : 0;
+    const clr   = driverColorMap[r.lic] || '#888';
+    return `
     <tr class="${i%2?'bg-gray-50':''}">
-      <td class="px-3 py-2 font-semibold text-[#0f3460]">${r.driver}</td>
-      <td class="px-3 py-2">${r.branch}</td>
-      <td class="px-3 py-2 text-center num font-bold text-[#e94560]">${n(r.returns)}</td>
-      <td class="px-3 py-2 text-center num">${n(r.total)}</td>
+      <td class="px-3 py-2 text-xs text-gray-400 num" dir="ltr">${r.date}</td>
+      <td class="px-3 py-2 font-semibold" style="color:${clr}">${r.driver}</td>
+      <td class="px-3 py-2 text-center text-xs text-gray-400">${r.branches.size}</td>
+      <td class="px-3 py-2 text-center num font-bold ${r.returns>0?'text-[#e94560]':'text-gray-300'}">${n(r.returns)}</td>
+      <td class="px-3 py-2 text-center num">${n(total)}</td>
       <td class="px-3 py-2 text-center">
-        <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${r.pct>20?'bg-red-100 text-red-700':r.pct>10?'bg-amber-100 text-amber-700':'bg-green-100 text-green-700'}">${r.pct}%</span>
+        <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${pct>20?'bg-red-100 text-red-700':pct>10?'bg-amber-100 text-amber-700':'bg-green-100 text-green-700'}">${pct}%</span>
       </td>
-    </tr>`).join('') :
-    `<tr><td colspan="5" class="px-3 py-8 text-center text-gray-400">אין נתוני החזרות</td></tr>`;
+    </tr>`;
+  }).join('') :
+    `<tr><td colspan="6" class="px-3 py-8 text-center text-gray-400">אין נתונים</td></tr>`;
 }
 
 // ─────────────────────────────────────────────────────
