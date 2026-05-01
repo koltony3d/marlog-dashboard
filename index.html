@@ -841,63 +841,65 @@ function renderCartonsTab() {
 // ─────────────────────────────────────────────────────
 function renderReturnsTab() {
   const data = FILTERED;
-  const hasReturns = data.some(d => d.החזרות > 0);
+  const totalReturns = sumField(data,'החזרות');
+  const hasReturns   = totalReturns > 0;
 
   document.getElementById('returnsNote').classList.toggle('hidden', hasReturns);
 
-  // By driver (all drivers, even 0)
-  makeChart('chartReturnsDriver', 'bar', {
-    labels: DRIVERS.map(d=>d.name),
-    datasets: [{ label:'החזרות', data: DRIVERS.map(drv => sumField(data.filter(d=>d.driver_lic===drv.license),'החזרות')),
-      backgroundColor: '#e94560' }]
-  }, { plugins:{ legend:{display:false} } });
+  // ── KPI strip ──
+  const totalPallets = sumField(data,'יבש') + sumField(data,'בצק');
+  const pctReturns   = totalPallets > 0 ? (totalReturns/totalPallets*100).toFixed(1) : '0';
+  const driversWithRet = DRIVERS.filter(drv =>
+    sumField(data.filter(d=>d.driver_lic===drv.license),'החזרות') > 0).length;
+  const branchesWithRet = new Set(data.filter(d=>d.החזרות>0).map(d=>d.branch_num)).size;
 
-  // Monthly
+  const kpiHtml = [
+    {label:'סה"כ החזרות', val:n(totalReturns), color:'#e94560'},
+    {label:'אחוז מסה"כ משטחים', val:pctReturns+'%', color:'#f39c12'},
+    {label:'נהגים עם החזרות', val:n(driversWithRet), color:'#0f3460'},
+    {label:'סניפים עם החזרות', val:n(branchesWithRet), color:'#9b59b6'}
+  ].map(k => `
+    <div class="bg-white rounded-xl p-4 shadow-sm border-r-4" style="border-color:${k.color}">
+      <div class="text-xs text-gray-500 mb-1">${k.label}</div>
+      <div class="text-2xl font-bold" style="color:${k.color}">${k.val}</div>
+    </div>`).join('');
+  document.getElementById('returnsKPI').innerHTML = kpiHtml;
+
+  // ── Monthly per driver (stacked bar) ──
   const byMonth = groupBy(data, 'month');
   const months = Object.keys(byMonth).map(Number).sort((a,b)=>a-b);
-  makeChart('chartReturnsMonthly', 'line', {
+  makeChart('chartRetMonthly', 'bar', {
     labels: months.map(m => MONTH_NAMES[m]),
-    datasets: [{ label:'החזרות', data: months.map(m => sumField(byMonth[m],'החזרות')),
-      borderColor:'#e94560', backgroundColor:'#e9456020', fill:true, tension:.4 }]
-  }, { plugins:{ legend:{display:false} } });
+    datasets: DRIVERS.map((drv,i) => ({
+      label: drv.name,
+      data: months.map(m => sumField(byMonth[m].filter(d=>d.driver_lic===drv.license),'החזרות')),
+      backgroundColor: COLORS[i]
+    }))
+  }, { scales:{ x:{stacked:true,ticks:{font:{family:'Heebo',size:11}}}, y:{stacked:true,ticks:{font:{family:'Heebo',size:11}}} } });
 
-  // ── פירוט לפי תאריך × נהג — כל יום, כל נהג ──
-  // מקבץ לפי date+driver_lic
-  const byDateDrv = {};
-  data.forEach(d => {
-    const k = d.date + '|' + d.driver_lic;
-    if (!byDateDrv[k]) byDateDrv[k] = { date:d.date, driver:d.driver_name, lic:d.driver_lic, returns:0, יבש:0, בצק:0, branches:new Set() };
-    byDateDrv[k].returns  += (d.החזרות||0);
-    byDateDrv[k].יבש      += (d.יבש||0);
-    byDateDrv[k].בצק      += (d.בצק||0);
-    byDateDrv[k].branches.add(d.branch_num);
+  // ── Weekly per driver (stacked bar) ──
+  const byWeek = groupBy(data, 'week');
+  const weeks = Object.keys(byWeek).map(Number).sort((a,b)=>a-b);
+  makeChart('chartRetWeekly', 'bar', {
+    labels: weeks.map(w => 'שבוע '+w),
+    datasets: DRIVERS.map((drv,i) => ({
+      label: drv.name,
+      data: weeks.map(w => sumField(byWeek[w].filter(d=>d.driver_lic===drv.license),'החזרות')),
+      backgroundColor: COLORS[i]
+    }))
+  }, { scales:{ x:{stacked:true,ticks:{font:{family:'Heebo',size:11}}}, y:{stacked:true,ticks:{font:{family:'Heebo',size:11}}} } });
+
+  // ── Daily trend per driver (line) ──
+  const parseDate = s => { const [dd,mm,yy] = s.split('/'); return `${yy.length===2?'20'+yy:yy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`; };
+  const allDates = [...new Set(data.map(d=>d.date))].sort((a,b) => parseDate(a).localeCompare(parseDate(b)));
+  makeChart('chartRetDaily', 'line', {
+    labels: allDates,
+    datasets: DRIVERS.map((drv,i) => ({
+      label: drv.name,
+      data: allDates.map(dt => sumField(data.filter(d=>d.date===dt && d.driver_lic===drv.license),'החזרות')),
+      borderColor: COLORS[i], backgroundColor: COLORS[i]+'30', tension:.3, fill:false
+    }))
   });
-
-  // ממיין לפי תאריך (dd/mm/yy → yyyy-mm-dd) ואח"כ לפי נהג
-  const parseDate = s => { const [d,m,y] = s.split('/'); return `${y.length===2?'20'+y:y}-${m}-${d}`; };
-  const rows = Object.values(byDateDrv)
-    .sort((a,b) => parseDate(a.date).localeCompare(parseDate(b.date)) || a.driver.localeCompare(b.driver,'he'));
-
-  const driverColorMap = {};
-  DRIVERS.forEach((drv,i) => driverColorMap[drv.license] = COLORS[i]);
-
-  document.getElementById('tbodyReturns').innerHTML = rows.length ? rows.map((r,i) => {
-    const total = r.יבש + r.בצק;
-    const pct   = total > 0 ? Math.round(r.returns/total*100) : 0;
-    const clr   = driverColorMap[r.lic] || '#888';
-    return `
-    <tr class="${i%2?'bg-gray-50':''}">
-      <td class="px-3 py-2 text-xs text-gray-400 num" dir="ltr">${r.date}</td>
-      <td class="px-3 py-2 font-semibold" style="color:${clr}">${r.driver}</td>
-      <td class="px-3 py-2 text-center text-xs text-gray-400">${r.branches.size}</td>
-      <td class="px-3 py-2 text-center num font-bold ${r.returns>0?'text-[#e94560]':'text-gray-300'}">${n(r.returns)}</td>
-      <td class="px-3 py-2 text-center num">${n(total)}</td>
-      <td class="px-3 py-2 text-center">
-        <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${pct>20?'bg-red-100 text-red-700':pct>10?'bg-amber-100 text-amber-700':'bg-green-100 text-green-700'}">${pct}%</span>
-      </td>
-    </tr>`;
-  }).join('') :
-    `<tr><td colspan="6" class="px-3 py-8 text-center text-gray-400">אין נתונים</td></tr>`;
 }
 
 // ─────────────────────────────────────────────────────
