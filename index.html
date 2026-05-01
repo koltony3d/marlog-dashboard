@@ -268,39 +268,32 @@
 
 <!-- ===== TAB 6: החזרות ===== -->
 <div id="tab-returns" class="tab-content fade-in">
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-    <div class="bg-white rounded-xl p-5 shadow-sm">
-      <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">החזרות לפי נהג</h3>
-      <div class="chart-container" style="height:260px"><canvas id="chartReturnsDriver"></canvas></div>
-    </div>
-    <div class="bg-white rounded-xl p-5 shadow-sm">
-      <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">החזרות חודשי</h3>
-      <div class="chart-container" style="height:260px"><canvas id="chartReturnsMonthly"></canvas></div>
-    </div>
+
+  <!-- KPI strip -->
+  <div id="returnsKPI" class="grid gap-4 mb-5" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"></div>
+
+  <div id="returnsNote" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-4 mb-5 text-sm text-amber-800">
+    ℹ️ אין נתוני החזרות עדיין. עמודת <strong>החזרות</strong> בגיליון אמורה להכיל ערכים.
   </div>
+
+  <!-- Chart 1: Monthly per driver -->
+  <div class="bg-white rounded-xl p-5 shadow-sm mb-5">
+    <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">📅 החזרות חודשי — לפי נהג</h3>
+    <div class="chart-container" style="height:280px"><canvas id="chartRetMonthly"></canvas></div>
+  </div>
+
+  <!-- Chart 2: Weekly per driver -->
+  <div class="bg-white rounded-xl p-5 shadow-sm mb-5">
+    <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">📆 החזרות שבועי — לפי נהג</h3>
+    <div class="chart-container" style="height:300px"><canvas id="chartRetWeekly"></canvas></div>
+  </div>
+
+  <!-- Chart 3: Daily trend per driver -->
   <div class="bg-white rounded-xl p-5 shadow-sm">
-    <div class="flex items-center justify-between mb-4 pb-2 border-b">
-      <h3 class="font-bold text-[#1a1a2e]">פירוט החזרות — נהג / סניף</h3>
-    </div>
-    <div id="returnsNote" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 text-sm text-amber-800">
-      ℹ️ אין נתוני החזרות בקבצים. הוסף עמודת <strong>החזרות</strong> לגיליון היומי כדי לעקוב.
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="bg-[#f0f4ff]">
-            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">תאריך</th>
-            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">נהג</th>
-            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">סניפים</th>
-            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">החזרות</th>
-            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">סה"כ משטחים</th>
-            <th class="px-3 py-2.5 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">% החזרה</th>
-          </tr>
-        </thead>
-        <tbody id="tbodyReturns"></tbody>
-      </table>
-    </div>
+    <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">📈 החזרות יומי — מגמה לפי נהג</h3>
+    <div class="chart-container" style="height:300px"><canvas id="chartRetDaily"></canvas></div>
   </div>
+
 </div>
 
 </main>

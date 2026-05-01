@@ -111,8 +111,11 @@ def parse_new_format(xl, week_num, year):
         col_batzek  = next((c for c,v in enumerate(hrow) if str(v).strip()=='בצק'), 4)
         col_cartons = next((c for c,v in enumerate(hrow) if str(v).strip()=='קרטונים'), 5)
         col_mush    = next((c for c,v in enumerate(hrow) if str(v).strip()=='פטריות'), 6)
-        # "החזרה" column — searched by name, works wherever it's placed (e.g. col J)
-        col_returns = next((c for c,v in enumerate(hrow) if str(v).strip() in ('החזרה','החזרות')), None)
+        # "החזרה"/"החזרות" column — searched by name first, then falls back to column H (index 7)
+        col_returns = next((c for c,v in enumerate(hrow) if str(v).strip() in ('החזרה','החזרות','חזרות')), None)
+        # If not found by name, use column index 7 (H = "הערה") — in some sheets returns are filled there as numbers
+        if col_returns is None:
+            col_returns = 7  # H column — treat numeric values as returns
 
         # Build branch quantity map from left table
         branch_qty = {}
