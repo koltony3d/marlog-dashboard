@@ -276,10 +276,10 @@
     ℹ️ אין נתוני החזרות עדיין. עמודת <strong>החזרות</strong> בגיליון אמורה להכיל ערכים.
   </div>
 
-  <!-- Chart 1: Monthly per driver -->
+  <!-- Chart 1: Total per driver -->
   <div class="bg-white rounded-xl p-5 shadow-sm mb-5">
-    <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">📅 החזרות חודשי — לפי נהג</h3>
-    <div class="chart-container" style="height:280px"><canvas id="chartRetMonthly"></canvas></div>
+    <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">👤 סה"כ החזרות לפי נהג</h3>
+    <div class="chart-container" style="height:300px"><canvas id="chartRetMonthly"></canvas></div>
   </div>
 
   <!-- Chart 2: Weekly per driver -->
@@ -865,17 +865,15 @@ function renderReturnsTab() {
     </div>`).join('');
   document.getElementById('returnsKPI').innerHTML = kpiHtml;
 
-  // ── Monthly per driver (stacked bar) ──
-  const byMonth = groupBy(data, 'month');
-  const months = Object.keys(byMonth).map(Number).sort((a,b)=>a-b);
+  // ── Total per driver (always shows all 5 drivers) ──
   makeChart('chartRetMonthly', 'bar', {
-    labels: months.map(m => MONTH_NAMES[m]),
-    datasets: DRIVERS.map((drv,i) => ({
-      label: drv.name,
-      data: months.map(m => sumField(byMonth[m].filter(d=>d.driver_lic===drv.license),'החזרות')),
-      backgroundColor: COLORS[i]
-    }))
-  }, { scales:{ x:{stacked:true,ticks:{font:{family:'Heebo',size:11}}}, y:{stacked:true,ticks:{font:{family:'Heebo',size:11}}} } });
+    labels: DRIVERS.map(d => d.name),
+    datasets: [{
+      label:'החזרות',
+      data: DRIVERS.map(drv => sumField(data.filter(d=>d.driver_lic===drv.license),'החזרות')),
+      backgroundColor: DRIVERS.map((_,i)=>COLORS[i])
+    }]
+  }, { plugins:{ legend:{display:false} } });
 
   // ── Weekly per driver (stacked bar) ──
   const byWeek = groupBy(data, 'week');
