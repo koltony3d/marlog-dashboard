@@ -41,7 +41,7 @@
   <div class="max-w-screen-xl mx-auto flex items-center justify-between gap-4 flex-wrap">
     <div>
       <h1 class="text-xl font-bold">סיכום שנתי מרלו"ג</h1>
-      <p class="text-xs opacity-70 mt-0.5" id="dataInfo">טוען נתונים...</p>
+      <p class="text-xs opacity-70 mt-0.5"><span id="dataInfo">טוען נתונים...</span> · <span id="lastUpdated">—</span> · <span class="opacity-80">רענון אוטו׳ כל 5 דק׳</span></p>
     </div>
     <div class="flex items-center gap-3 flex-wrap">
       <select id="yearFilter" class="bg-white/10 border border-white/30 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/50">
@@ -476,14 +476,152 @@ let SUMMARY_DATA = [];    // כמו FILTERED אבל ללא שבוע 1 דצמבר
 const charts = {};
 
 // ─────────────────────────────────────────────────────
+// LIVE DATA FROM GOOGLE SHEETS
+// ─────────────────────────────────────────────────────
+const SHEET_ID = '1KDX29q8jx2kOpNdD6pv2S4fbaGAQG0DDsdowBW1lSR4';
+const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
+const REFRESH_MS = 5 * 60 * 1000; // 5 דקות
+
+const AREA_MAP = {
+  101:'מרכז',102:'מרכז',103:'מרכז',105:'ירושלים',106:'מרכז',107:'מרכז',108:'מרכז',109:'צפון',110:'צפון',
+  111:'מרכז',112:'ירושלים',113:'מרכז',114:'דרום',115:'צפון',118:'ירושלים',119:'דרום',120:'דרום',121:'מרכז',
+  122:'מרכז',123:'צפון',124:'מרכז',126:'ירושלים',128:'ירושלים',130:'צפון',131:'צפון',132:'מרכז',133:'צפון',
+  135:'צפון',136:'מרכז',137:'צפון',139:'דרום',140:'מרכז',141:'ירושלים',142:'ירושלים',143:'צפון',144:'מרכז',
+  146:'מרכז',147:'מרכז',148:'צפון',149:'צפון',150:'מרכז',151:'מרכז',152:'מרכז',153:'צפון',154:'דרום',
+  155:'מרכז',156:'צפון',157:'ירושלים',158:'צפון',159:'מרכז',160:'צפון',161:'מרכז',162:'מרכז',163:'מרכז',
+  164:'דרום',165:'מרכז',166:'מרכז',167:'מרכז',168:'צפון',169:'צפון',170:'דרום',171:'ירושלים',173:'צפון',
+  174:'מרכז',175:'צפון',176:'צפון',177:'צפון',178:'צפון',179:'מרכז',180:'מרכז',181:'מרכז',182:'מרכז',
+  183:'צפון',184:'ירושלים',185:'מרכז',186:'דרום',187:'מרכז',188:'דרום',189:'דרום',190:'דרום',191:'מרכז',
+  192:'מרכז',193:'מרכז',194:'דרום',198:'מרכז',199:'מרכז',210:'מרכז',213:'צפון',214:'דרום',216:'מרכז',
+  217:'צפון',218:'צפון',219:'צפון',222:'צפון',223:'צפון',225:'דרום',226:'צפון',227:'ירושלים',228:'מרכז',
+  229:'ירושלים',231:'מרכז'
+};
+
+function ti(v) { const x = parseFloat(String(v||'').trim()); return isFinite(x) ? Math.round(x) : 0; }
+
+// CSV parser שמטפל בשדות מצוטטים
+function parseCSV(text) {
+  const rows = [];
+  let row = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"' && text[i+1] === '"') { cell += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else cell += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+      else if (c !== '\r') cell += c;
+    }
+  }
+  if (cell.length || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
+function csvToRecords(text) {
+  // חיתוך BOM
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = parseCSV(text);
+  if (!rows.length) return [];
+  const header = rows[0].map(h => h.trim());
+  const idx = name => header.indexOf(name);
+  const iDate=idx('תאריך'), iDay=idx('יום'), iMoked=idx('מוקד'), iBranchName=idx('שם מוקד'),
+        iDriver=idx('נהג'), iLic=idx('משאית'), iY=idx('יבש'), iB=idx('בצק'),
+        iC=idx('קרטון'), iR=idx('החזרה'), iW=idx('שבוע');
+
+  const out = [];
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const dateStr = (row[iDate]||'').trim();
+    if (!dateStr) continue;
+    const parts = dateStr.split('/');
+    if (parts.length !== 3) continue;
+    const day_d = parseInt(parts[0]), month_d = parseInt(parts[1]);
+    let year_d = parseInt(parts[2]); if (year_d < 100) year_d += 2000;
+
+    const moked = String(row[iMoked]||'').trim();
+    const branch_num = moked.startsWith('10') && moked.length > 2 ? ti(moked.slice(2)) : ti(moked);
+
+    out.push({
+      week:        ti(row[iW]),
+      year:        year_d,
+      month:       month_d,
+      day:         (row[iDay]||'').trim(),
+      date:        dateStr,
+      branch_num:  branch_num,
+      branch_name: (row[iBranchName]||'').trim(),
+      area:        AREA_MAP[branch_num] || '',
+      driver_lic:  (row[iLic]||'').trim(),
+      driver_name: (row[iDriver]||'').trim(),
+      'יבש':       ti(row[iY]),
+      'בצק':       ti(row[iB]),
+      'קרטונים':   ti(row[iC]),
+      'פטריות':    0,
+      'החזרות':    ti(row[iR]),
+    });
+  }
+  return out;
+}
+
+async function fetchLiveData() {
+  const url = SHEET_CSV_URL + '&t=' + Date.now(); // cache-bust
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Sheet fetch failed: ' + res.status);
+  const txt = await res.text();
+  return csvToRecords(txt);
+}
+
+function setLastUpdated() {
+  const now = new Date();
+  const t = now.toLocaleTimeString('he-IL', {hour:'2-digit', minute:'2-digit'});
+  const el = document.getElementById('lastUpdated');
+  if (el) el.textContent = 'עודכן: ' + t;
+}
+
+async function refreshData() {
+  try {
+    const recs = await fetchLiveData();
+    if (recs.length) {
+      ALL_DATA = recs;
+      applyFilters();          // מרענן פילטרים + רינדור מלא
+      setLastUpdated();
+      updateDataInfo();
+    }
+  } catch (e) {
+    console.warn('רענון נכשל:', e);
+  }
+}
+
+function updateDataInfo() {
+  const years = [...new Set(ALL_DATA.map(d => d.year))].sort();
+  const weeks = [...new Set(ALL_DATA.map(d => d.week))].length;
+  document.getElementById('dataInfo').textContent =
+    `${ALL_DATA.length.toLocaleString('he-IL')} רשומות | ${weeks} שבועות | ${years.join('–')}`;
+}
+
+// ─────────────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────────────
 async function init() {
+  // ניסיון 1: Google Sheets חי
   try {
-    const res = await fetch('data/data.json');
-    if (res.ok) { ALL_DATA = await res.json(); }
-    else throw new Error('no file');
-  } catch { ALL_DATA = generateSampleData(); }
+    const recs = await fetchLiveData();
+    if (recs.length) ALL_DATA = recs;
+    else throw new Error('empty');
+  } catch (e) {
+    // נפילה ל-data.json מקומי
+    try {
+      const res = await fetch('data/data.json');
+      if (res.ok) ALL_DATA = await res.json();
+      else throw new Error('no file');
+    } catch { ALL_DATA = generateSampleData(); }
+  }
+  setLastUpdated();
+
+  // רענון אוטומטי כל 5 דקות
+  setInterval(refreshData, REFRESH_MS);
 
   const years = [...new Set(ALL_DATA.map(d => d.year))].sort();
   const sel = document.getElementById('yearFilter');
