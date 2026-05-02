@@ -499,6 +499,21 @@ const AREA_MAP = {
 
 function ti(v) { const x = parseFloat(String(v||'').trim()); return isFinite(x) ? Math.round(x) : 0; }
 
+// נורמליזציה של שמות נהגים — מאחדת וריאציות + מסננת "עלי"
+//   • שני נהגים ביחד (מכיל "+") → "אילת"
+//   • איסמעיל / אסמעיל / איסמאיל / אסמאיל / קבלן איסמעיל → "איסמעיל"
+//   • כל מי שהשם מכיל "דני" (קבלן דני, דני קבלן, דני 08:00 וכו') → "דני"
+//   • "עלי" בלבד (בלי "+") → null = רשומה מסוננת מהדאטה
+function normalizeDriver(name) {
+  const n = (name || '').trim();
+  if (!n) return '';
+  if (n === 'עלי') return null;
+  if (n.includes('+')) return 'אילת';
+  if (/איסמעיל|אסמעיל|איסמאיל|אסמאיל/.test(n)) return 'איסמעיל';
+  if (n.includes('דני')) return 'דני';
+  return n;
+}
+
 // CSV parser שמטפל בשדות מצוטטים
 function parseCSV(text) {
   const rows = [];
@@ -546,6 +561,10 @@ function csvToRecords(text) {
     const moked = String(row[iMoked]||'').trim();
     const branch_num = moked.startsWith('10') && moked.length > 2 ? ti(moked.slice(2)) : ti(moked);
 
+    const rawDriver = (row[iDriver]||'').trim();
+    const drvNorm = normalizeDriver(rawDriver);
+    if (drvNorm === null) continue; // "עלי" — מסונן
+
     out.push({
       week:        ti(row[iW]),
       year:        year_d,
@@ -556,7 +575,7 @@ function csvToRecords(text) {
       branch_name: (row[iBranchName]||'').trim(),
       area:        AREA_MAP[branch_num] || '',
       driver_lic:  (row[iLic]||'').trim(),
-      driver_name: (row[iDriver]||'').trim(),
+      driver_name: drvNorm,
       'יבש':       ti(row[iY]),
       'בצק':       ti(row[iB]),
       'קרטונים':   ti(row[iC]),
@@ -565,6 +584,15 @@ function csvToRecords(text) {
     });
   }
   return out;
+}
+
+// אותה נורמליזציה מוחלת גם על data.json (fallback)
+function normalizeRecords(arr) {
+  return arr.reduce((acc, r) => {
+    const drvNorm = normalizeDriver(r.driver_name);
+    if (drvNorm !== null) acc.push({ ...r, driver_name: drvNorm });
+    return acc;
+  }, []);
 }
 
 async function fetchLiveData() {
@@ -616,9 +644,9 @@ async function init() {
     // נפילה ל-data.json מקומי
     try {
       const res = await fetch('data/data.json');
-      if (res.ok) ALL_DATA = await res.json();
+      if (res.ok) ALL_DATA = normalizeRecords(await res.json());
       else throw new Error('no file');
-    } catch { ALL_DATA = generateSampleData(); }
+    } catch { ALL_DATA = normalizeRecords(generateSampleData()); }
   }
   setLastUpdated();
 
