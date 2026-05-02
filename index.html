@@ -501,18 +501,24 @@ const AREA_MAP = {
 
 function ti(v) { const x = parseFloat(String(v||'').trim()); return isFinite(x) ? Math.round(x) : 0; }
 
-// נורמליזציה של שמות נהגים — מאחדת וריאציות + מסננת "עלי"
-//   • שני נהגים ביחד (מכיל "+") → "אילת"
-//   • איסמעיל / אסמעיל / איסמאיל / אסמאיל / קבלן איסמעיל → "איסמעיל"
-//   • כל מי שהשם מכיל "דני" (קבלן דני, דני קבלן, דני 08:00 וכו') → "דני"
-//   • "עלי" בלבד (בלי "+") → null = רשומה מסוננת מהדאטה
+// נורמליזציה של שמות נהגים — מאחדת וריאציות + מסננת ערכים שאינם נהגים
+//   ✓ איסמעיל / אסמעיל / איסמאיל / אסמאיל / קבלן איסמעיל → "איסמעיל"
+//   ✓ כל מי שהשם מכיל "דני" (קבלן דני, דני קבלן, דני 08:00 וכו') → "דני"
+//   ✗ "עלי" בלבד → מסונן
+//   ✗ שני נהגים ביחד ("+") → מסונן (לא נהג בודד)
+//   ✗ "קבלן" סתם, "סגורים בגלל המצב", "לוקח עצמאי", "צפון**קבלן אסף" → מסוננים
 function normalizeDriver(name) {
   const n = (name || '').trim();
   if (!n) return '';
-  if (n === 'עלי') return null;
-  if (n.includes('+')) return 'אילת';
+  // איסמעיל ודני קודם — לפני סינון "קבלן" כי ייתכן "קבלן דני"
   if (/איסמעיל|אסמעיל|איסמאיל|אסמאיל/.test(n)) return 'איסמעיל';
   if (n.includes('דני')) return 'דני';
+  if (n === 'עלי') return null;
+  if (n.includes('+')) return null;
+  if (n.includes('קבלן')) return null;
+  if (n.includes('סגורים')) return null;
+  if (n.includes('לוקח עצמאי')) return null;
+  if (n === 'אילת') return null;
   return n;
 }
 
@@ -795,27 +801,28 @@ function renderDriverTab() {
   const data = FILTERED;
   const metric = document.getElementById('driverMetric').value;
 
-  // קיבוץ לפי משאית (מס׳ רישוי). לכל משאית — אוסף כל הנהגים שנהגו עליה.
-  // משאית ריקה (קבלנים, ארז וכו׳) מקובצת תחת "—".
-  const byLic = {};
+  // קיבוץ לפי נהג. כל נהג מקבל שורה משלו, גם אם נסע על כמה משאיות,
+  // וגם אם אין לו רישוי קבוע (דני, איסמעיל). הספירות (ימים/משטחים/...) הן לפי הנהג.
+  const byDrv = {};
   data.forEach(d => {
-    const lic = (d.driver_lic || '').trim() || '—';
-    if (!byLic[lic]) byLic[lic] = { lic, recs: [], drivers: {} };
-    byLic[lic].recs.push(d);
-    if (d.driver_name) byLic[lic].drivers[d.driver_name] = (byLic[lic].drivers[d.driver_name]||0) + 1;
+    if (!d.driver_name) return;
+    if (!byDrv[d.driver_name]) byDrv[d.driver_name] = { name: d.driver_name, recs: [], lics: {} };
+    byDrv[d.driver_name].recs.push(d);
+    const lic = (d.driver_lic||'').trim();
+    if (lic) byDrv[d.driver_name].lics[lic] = (byDrv[d.driver_name].lics[lic]||0) + 1;
   });
 
-  const rows = Object.values(byLic).map(g => {
+  const rows = Object.values(byDrv).map(g => {
     const recs = g.recs;
     const days     = new Set(recs.map(r => r.date)).size;
     const branches = new Set(recs.map(r => r.branch_num)).size;
     const יבש = sumField(recs,'יבש'), בצק = sumField(recs,'בצק');
-    // נהגים ממוינים לפי תדירות
-    const drvList = Object.entries(g.drivers).sort((a,b) => b[1]-a[1]).map(e => e[0]);
+    // משאיות ממוינות לפי תדירות
+    const licList = Object.entries(g.lics).sort((a,b) => b[1]-a[1]).map(e => e[0]);
     return {
-      lic: g.lic,
-      drvList,
-      drvLabel: drvList.join(' · ') || '—',
+      name: g.name,
+      licList,
+      licLabel: licList.join(' · ') || '—',
       days, branches, יבש, בצק, total: יבש+בצק,
       קרטונים: sumField(recs,'קרטונים'),
       פטריות: sumField(recs,'פטריות'),
@@ -830,17 +837,17 @@ function renderDriverTab() {
   const PALETTE = ['#0f3460','#e94560','#2ecc71','#f39c12','#9b59b6','#3498db','#e67e22','#1abc9c','#34495e','#d35400','#16a085','#c0392b','#27ae60','#8e44ad','#f1c40f'];
 
   makeChart('chartDriverBar', 'bar', {
-    labels: rows.map(r => r.drvLabel + (r.lic !== '—' ? `\n(${r.lic})` : '')),
+    labels: rows.map(r => r.name),
     datasets: [{ label: metricLabel[metric], data: rows.map(metricFn),
       backgroundColor: rows.map((_,i) => PALETTE[i % PALETTE.length]) }]
   }, { plugins:{ legend:{display:false} },
-       scales:{ x:{ ticks:{font:{family:'Heebo',size:11}, autoSkip:false } } } });
+       scales:{ x:{ ticks:{font:{family:'Heebo',size:12}, autoSkip:false } } } });
 
   const tbody = document.getElementById('tbodyDriver');
   tbody.innerHTML = rows.map((r,i) => `
     <tr class="${i%2?'bg-gray-50':''}">
-      <td class="px-3 py-2 font-semibold text-[#0f3460]">${r.drvLabel}</td>
-      <td class="px-3 py-2 text-center text-gray-500 text-xs num"><span dir="ltr">${r.lic}</span></td>
+      <td class="px-3 py-2 font-semibold text-[#0f3460]">${r.name}</td>
+      <td class="px-3 py-2 text-center text-gray-500 text-xs num"><span dir="ltr">${r.licLabel}</span></td>
       <td class="px-3 py-2 text-center num font-medium">${n(r.days)}</td>
       <td class="px-3 py-2 text-center num">${n(r.branches)}</td>
       <td class="px-3 py-2 text-center num">${n(r.יבש)}</td>
