@@ -794,34 +794,53 @@ function renderSummaryTab() {
 function renderDriverTab() {
   const data = FILTERED;
   const metric = document.getElementById('driverMetric').value;
-  const byDriver = groupBy(data, 'driver_lic');
 
-  const rows = DRIVERS.map(drv => {
-    const recs = byDriver[drv.license] || [];
-    const days = new Set(recs.map(r => r.date)).size;
+  // קיבוץ לפי משאית (מס׳ רישוי). לכל משאית — אוסף כל הנהגים שנהגו עליה.
+  // משאית ריקה (קבלנים, ארז וכו׳) מקובצת תחת "—".
+  const byLic = {};
+  data.forEach(d => {
+    const lic = (d.driver_lic || '').trim() || '—';
+    if (!byLic[lic]) byLic[lic] = { lic, recs: [], drivers: {} };
+    byLic[lic].recs.push(d);
+    if (d.driver_name) byLic[lic].drivers[d.driver_name] = (byLic[lic].drivers[d.driver_name]||0) + 1;
+  });
+
+  const rows = Object.values(byLic).map(g => {
+    const recs = g.recs;
+    const days     = new Set(recs.map(r => r.date)).size;
     const branches = new Set(recs.map(r => r.branch_num)).size;
     const יבש = sumField(recs,'יבש'), בצק = sumField(recs,'בצק');
-    const קרטונים = sumField(recs,'קרטונים');
-    const פטריות = sumField(recs,'פטריות');
-    const החזרות = sumField(recs,'החזרות');
-    return { drv, days, branches, יבש, בצק, total:יבש+בצק, קרטונים, פטריות, החזרות };
-  });
+    // נהגים ממוינים לפי תדירות
+    const drvList = Object.entries(g.drivers).sort((a,b) => b[1]-a[1]).map(e => e[0]);
+    return {
+      lic: g.lic,
+      drvList,
+      drvLabel: drvList.join(' · ') || '—',
+      days, branches, יבש, בצק, total: יבש+בצק,
+      קרטונים: sumField(recs,'קרטונים'),
+      פטריות: sumField(recs,'פטריות'),
+      החזרות: sumField(recs,'החזרות'),
+    };
+  }).sort((a,b) => b.total - a.total);
 
   const metricVals = { total: r=>r.total, יבש: r=>r.יבש, בצק: r=>r.בצק, קרטונים: r=>r.קרטונים, days: r=>r.days };
   const metricFn = metricVals[metric] || (r=>r.total);
   const metricLabel = { total:'סה"כ משטחים', יבש:'יבש', בצק:'בצק', קרטונים:'קרטונים', days:'ימי עבודה' };
 
+  const PALETTE = ['#0f3460','#e94560','#2ecc71','#f39c12','#9b59b6','#3498db','#e67e22','#1abc9c','#34495e','#d35400','#16a085','#c0392b','#27ae60','#8e44ad','#f1c40f'];
+
   makeChart('chartDriverBar', 'bar', {
-    labels: rows.map(r => r.drv.name),
+    labels: rows.map(r => r.drvLabel + (r.lic !== '—' ? `\n(${r.lic})` : '')),
     datasets: [{ label: metricLabel[metric], data: rows.map(metricFn),
-      backgroundColor: COLORS.slice(0, rows.length) }]
-  }, { plugins:{ legend:{display:false} } });
+      backgroundColor: rows.map((_,i) => PALETTE[i % PALETTE.length]) }]
+  }, { plugins:{ legend:{display:false} },
+       scales:{ x:{ ticks:{font:{family:'Heebo',size:11}, autoSkip:false } } } });
 
   const tbody = document.getElementById('tbodyDriver');
   tbody.innerHTML = rows.map((r,i) => `
     <tr class="${i%2?'bg-gray-50':''}">
-      <td class="px-3 py-2 font-semibold text-[#0f3460]">${r.drv.name}</td>
-      <td class="px-3 py-2 text-center text-gray-400 text-xs num"><span dir="ltr">${r.drv.license}</span></td>
+      <td class="px-3 py-2 font-semibold text-[#0f3460]">${r.drvLabel}</td>
+      <td class="px-3 py-2 text-center text-gray-500 text-xs num"><span dir="ltr">${r.lic}</span></td>
       <td class="px-3 py-2 text-center num font-medium">${n(r.days)}</td>
       <td class="px-3 py-2 text-center num">${n(r.branches)}</td>
       <td class="px-3 py-2 text-center num">${n(r.יבש)}</td>
