@@ -288,9 +288,9 @@
     <div class="chart-container" style="height:300px"><canvas id="chartRetWeekly"></canvas></div>
   </div>
 
-  <!-- Chart 3: Daily trend per driver -->
+  <!-- Chart 3: Monthly per driver -->
   <div class="bg-white rounded-xl p-5 shadow-sm">
-    <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">📈 החזרות יומי — מגמה לפי נהג</h3>
+    <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">📅 החזרות חודשי — לפי נהג</h3>
     <div class="chart-container" style="height:300px"><canvas id="chartRetDaily"></canvas></div>
   </div>
 
@@ -529,7 +529,9 @@ function csvToRecords(text) {
   const idx = name => header.indexOf(name);
   const iDate=idx('תאריך'), iDay=idx('יום'), iMoked=idx('מוקד'), iBranchName=idx('שם מוקד'),
         iDriver=idx('נהג'), iLic=idx('משאית'), iY=idx('יבש'), iB=idx('בצק'),
-        iC=idx('קרטון'), iR=idx('החזרה'), iW=idx('שבוע');
+        iC=idx('קרטון'),
+        iR=(idx('החזרות')>=0?idx('החזרות'):idx('החזרה')),
+        iW=idx('שבוע');
 
   const out = [];
   for (let r = 1; r < rows.length; r++) {
@@ -984,11 +986,20 @@ function renderReturnsTab() {
 
   document.getElementById('returnsNote').classList.toggle('hidden', hasReturns);
 
+  // ── זיהוי דינמי של נהגים מתוך הנתונים (כל מי שהופיע אי פעם) ──
+  const driverTotals = {};
+  data.forEach(d => {
+    if (!d.driver_name) return;
+    if (!driverTotals[d.driver_name]) driverTotals[d.driver_name] = 0;
+    driverTotals[d.driver_name] += (d.החזרות||0);
+  });
+  // ממוין לפי כמות החזרות (יורד), כל הנהגים מהדאטה
+  const drvNames = Object.keys(driverTotals).sort((a,b) => driverTotals[b]-driverTotals[a]);
+
   // ── KPI strip ──
   const totalPallets = sumField(data,'יבש') + sumField(data,'בצק');
   const pctReturns   = totalPallets > 0 ? (totalReturns/totalPallets*100).toFixed(1) : '0';
-  const driversWithRet = DRIVERS.filter(drv =>
-    sumField(data.filter(d=>d.driver_lic===drv.license),'החזרות') > 0).length;
+  const driversWithRet = drvNames.filter(nm => driverTotals[nm] > 0).length;
   const branchesWithRet = new Set(data.filter(d=>d.החזרות>0).map(d=>d.branch_num)).size;
 
   const kpiHtml = [
@@ -1003,18 +1014,20 @@ function renderReturnsTab() {
     </div>`).join('');
   document.getElementById('returnsKPI').innerHTML = kpiHtml;
 
-  // ── Total per driver (always shows all 5 drivers, with value labels) ──
-  const drvVals = DRIVERS.map(drv => sumField(data.filter(d=>d.driver_lic===drv.license),'החזרות'));
+  // פלטת צבעים מורחבת לכל הנהגים (כולל החדשים)
+  const PALETTE = ['#0f3460','#e94560','#2ecc71','#f39c12','#9b59b6','#3498db','#e67e22','#1abc9c','#34495e','#d35400','#16a085','#c0392b','#27ae60','#8e44ad','#f1c40f'];
+  const drvColor = nm => PALETTE[drvNames.indexOf(nm) % PALETTE.length];
+
+  // ── 1) Total per driver (כל הנהגים מהדאטה) ──
+  const drvVals = drvNames.map(nm => driverTotals[nm]);
   makeChart('chartRetMonthly', 'bar', {
-    labels: DRIVERS.map(d => d.name),
+    labels: drvNames,
     datasets: [{
       label:'החזרות',
       data: drvVals,
-      backgroundColor: DRIVERS.map((_,i)=>COLORS[i]),
-      // ערכי-מינימום כדי שעמודות 0 ייראו גם הן (פס דק 2% מהמקסימום)
+      backgroundColor: drvNames.map(drvColor),
       borderWidth: 0,
-      barThickness: 'flex',
-      maxBarThickness: 80
+      maxBarThickness: 60
     }]
   }, {
     plugins:{
@@ -1022,13 +1035,13 @@ function renderReturnsTab() {
       tooltip:{ callbacks:{ label: c => 'החזרות: ' + c.parsed.y } }
     },
     scales:{
-      y:{ beginAtZero:true, suggestedMax: Math.max(...drvVals, 5) + 2, ticks:{ stepSize:1, font:{family:'Heebo',size:11}} },
-      x:{ ticks:{font:{family:'Heebo',size:13, weight:'bold'}} }
+      y:{ beginAtZero:true, suggestedMax: Math.max(...drvVals,5) + 2, ticks:{ stepSize:1, font:{family:'Heebo',size:11}} },
+      x:{ ticks:{font:{family:'Heebo',size:12, weight:'bold'}, autoSkip:false, maxRotation:45, minRotation:30} }
     },
     animation:{
       onComplete: function() {
         const ctx = this.ctx;
-        ctx.font = 'bold 14px Heebo';
+        ctx.font = 'bold 13px Heebo';
         ctx.fillStyle = '#1a1a2e';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
@@ -1040,29 +1053,29 @@ function renderReturnsTab() {
     }
   });
 
-  // ── Weekly per driver (stacked bar) ──
+  // ── 2) Weekly per driver (stacked) ──
   const byWeek = groupBy(data, 'week');
   const weeks = Object.keys(byWeek).map(Number).sort((a,b)=>a-b);
   makeChart('chartRetWeekly', 'bar', {
     labels: weeks.map(w => 'שבוע '+w),
-    datasets: DRIVERS.map((drv,i) => ({
-      label: drv.name,
-      data: weeks.map(w => sumField(byWeek[w].filter(d=>d.driver_lic===drv.license),'החזרות')),
-      backgroundColor: COLORS[i]
+    datasets: drvNames.map(nm => ({
+      label: nm,
+      data: weeks.map(w => sumField(byWeek[w].filter(d=>d.driver_name===nm),'החזרות')),
+      backgroundColor: drvColor(nm)
     }))
   }, { scales:{ x:{stacked:true,ticks:{font:{family:'Heebo',size:11}}}, y:{stacked:true,ticks:{font:{family:'Heebo',size:11}}} } });
 
-  // ── Daily trend per driver (line) ──
-  const parseDate = s => { const [dd,mm,yy] = s.split('/'); return `${yy.length===2?'20'+yy:yy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`; };
-  const allDates = [...new Set(data.map(d=>d.date))].sort((a,b) => parseDate(a).localeCompare(parseDate(b)));
-  makeChart('chartRetDaily', 'line', {
-    labels: allDates,
-    datasets: DRIVERS.map((drv,i) => ({
-      label: drv.name,
-      data: allDates.map(dt => sumField(data.filter(d=>d.date===dt && d.driver_lic===drv.license),'החזרות')),
-      borderColor: COLORS[i], backgroundColor: COLORS[i]+'30', tension:.3, fill:false
+  // ── 3) Monthly per driver (stacked) ──
+  const byMonth = groupBy(data, 'month');
+  const months = Object.keys(byMonth).map(Number).sort((a,b)=>a-b);
+  makeChart('chartRetDaily', 'bar', {
+    labels: months.map(m => MONTH_NAMES[m]),
+    datasets: drvNames.map(nm => ({
+      label: nm,
+      data: months.map(m => sumField(byMonth[m].filter(d=>d.driver_name===nm),'החזרות')),
+      backgroundColor: drvColor(nm)
     }))
-  });
+  }, { scales:{ x:{stacked:true,ticks:{font:{family:'Heebo',size:11}}}, y:{stacked:true,ticks:{font:{family:'Heebo',size:11}}} } });
 }
 
 // ─────────────────────────────────────────────────────
