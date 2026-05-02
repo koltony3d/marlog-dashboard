@@ -910,40 +910,57 @@ function renderBranchTab() {
 function renderDaysTab() {
   const data = FILTERED;
 
-  // Monthly days per driver
+  // זיהוי דינמי של נהגים מהדאטה — ממוין לפי מספר ימי נסיעה (יורד)
+  const daysByDriver = {};
+  data.forEach(d => {
+    if (!d.driver_name) return;
+    if (!daysByDriver[d.driver_name]) daysByDriver[d.driver_name] = new Set();
+    daysByDriver[d.driver_name].add(d.date);
+  });
+  const drvNames = Object.keys(daysByDriver).sort((a,b) => daysByDriver[b].size - daysByDriver[a].size);
+
+  const PALETTE = ['#0f3460','#e94560','#2ecc71','#f39c12','#9b59b6','#3498db','#e67e22','#1abc9c','#34495e','#d35400','#16a085','#c0392b','#27ae60','#8e44ad','#f1c40f'];
+  const drvColor = nm => PALETTE[drvNames.indexOf(nm) % PALETTE.length];
+
+  // Monthly days per driver (stacked)
   const byMonth = groupBy(data, 'month');
   const months = Object.keys(byMonth).map(Number).sort((a,b)=>a-b);
 
   makeChart('chartDaysDriver', 'bar', {
     labels: months.map(m => MONTH_NAMES[m]),
-    datasets: DRIVERS.map((drv, i) => ({
-      label: drv.name,
+    datasets: drvNames.map(nm => ({
+      label: nm,
       data: months.map(m => {
-        const recs = (byMonth[m]||[]).filter(d => d.driver_lic === drv.license);
+        const recs = (byMonth[m]||[]).filter(d => d.driver_name === nm);
         return new Set(recs.map(d => d.date)).size;
       }),
-      backgroundColor: COLORS[i]
+      backgroundColor: drvColor(nm)
     }))
   }, { scales:{ x:{stacked:true,ticks:{font:{family:'Heebo',size:11}}}, y:{stacked:true,ticks:{font:{family:'Heebo',size:11}}} } });
 
   // Driver summary cards
-  document.getElementById('driverDaysSummary').innerHTML = DRIVERS.map((drv,i) => {
-    const recs = data.filter(d => d.driver_lic === drv.license);
+  document.getElementById('driverDaysSummary').innerHTML = drvNames.map(nm => {
+    const recs = data.filter(d => d.driver_name === nm);
     const days = new Set(recs.map(d => d.date)).size;
     const byDay = groupBy(recs, 'day');
     const topDay = DAY_ORDER.reduce((best, d) => {
       const cnt = new Set((byDay[d]||[]).map(r=>r.date)).size;
       return cnt > (best.cnt||0) ? {day:d, cnt} : best;
     }, {}).day || '—';
+    // רישיון נפוץ ביותר (אם יש)
+    const licCount = {};
+    recs.forEach(r => { if (r.driver_lic) licCount[r.driver_lic] = (licCount[r.driver_lic]||0)+1; });
+    const mainLic = Object.keys(licCount).sort((a,b)=>licCount[b]-licCount[a])[0] || '';
+    const c = drvColor(nm);
     return `
       <div class="flex items-center gap-3 py-3 border-b last:border-0">
-        <div class="w-2 h-8 rounded-full flex-shrink-0" style="background:${COLORS[i]}"></div>
+        <div class="w-2 h-8 rounded-full flex-shrink-0" style="background:${c}"></div>
         <div class="flex-1">
-          <div class="font-semibold text-[#1a1a2e]">${drv.name}</div>
-          <div class="text-xs text-gray-400"><span dir="ltr">${drv.license}</span> — יום עיקרי: ${topDay}</div>
+          <div class="font-semibold text-[#1a1a2e]">${nm}</div>
+          <div class="text-xs text-gray-400">${mainLic?`<span dir="ltr">${mainLic}</span> — `:''}יום עיקרי: ${topDay}</div>
         </div>
         <div class="text-center">
-          <div class="text-2xl font-bold num" style="color:${COLORS[i]}">${n(days)}</div>
+          <div class="text-2xl font-bold num" style="color:${c}">${n(days)}</div>
           <div class="text-xs text-gray-400">ימים</div>
         </div>
       </div>`;
@@ -956,12 +973,13 @@ function renderDaysTab() {
     allWeeks.map(w => `<th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center text-xs">ש${w}</th>`).join('') +
     `<th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">סה"כ</th>`;
 
-  document.getElementById('tbodyDays').innerHTML = DRIVERS.map((drv,i) => {
-    const recs = data.filter(d => d.driver_lic === drv.license);
+  document.getElementById('tbodyDays').innerHTML = drvNames.map((nm,i) => {
+    const recs = data.filter(d => d.driver_name === nm);
     const byWeek = groupBy(recs, 'week');
     const total = new Set(recs.map(d=>d.date)).size;
+    const c = drvColor(nm);
     return `<tr class="${i%2?'bg-gray-50':''}">
-      <td class="px-3 py-2 font-semibold" style="color:${COLORS[i]}">${drv.name}</td>
+      <td class="px-3 py-2 font-semibold" style="color:${c}">${nm}</td>
       ${allWeeks.map(w => {
         const wRecs = byWeek[w] || [];
         const cnt = new Set(wRecs.map(d=>d.date)).size;
