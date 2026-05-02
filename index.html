@@ -561,6 +561,8 @@ function csvToRecords(text) {
     const moked = String(row[iMoked]||'').trim();
     const branch_num = moked.startsWith('10') && moked.length > 2 ? ti(moked.slice(2)) : ti(moked);
 
+    if (year_d < 2026) continue; // מסננים שנת 2025 ומוקדם
+
     const rawDriver = (row[iDriver]||'').trim();
     const drvNorm = normalizeDriver(rawDriver);
     if (drvNorm === null) continue; // "עלי" — מסונן
@@ -586,9 +588,10 @@ function csvToRecords(text) {
   return out;
 }
 
-// אותה נורמליזציה מוחלת גם על data.json (fallback)
+// אותה נורמליזציה מוחלת גם על data.json (fallback) + סינון שנת 2025
 function normalizeRecords(arr) {
   return arr.reduce((acc, r) => {
+    if ((r.year || 0) < 2026) return acc;
     const drvNorm = normalizeDriver(r.driver_name);
     if (drvNorm !== null) acc.push({ ...r, driver_name: drvNorm });
     return acc;
