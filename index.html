@@ -1003,15 +1003,42 @@ function renderReturnsTab() {
     </div>`).join('');
   document.getElementById('returnsKPI').innerHTML = kpiHtml;
 
-  // ── Total per driver (always shows all 5 drivers) ──
+  // ── Total per driver (always shows all 5 drivers, with value labels) ──
+  const drvVals = DRIVERS.map(drv => sumField(data.filter(d=>d.driver_lic===drv.license),'החזרות'));
   makeChart('chartRetMonthly', 'bar', {
     labels: DRIVERS.map(d => d.name),
     datasets: [{
       label:'החזרות',
-      data: DRIVERS.map(drv => sumField(data.filter(d=>d.driver_lic===drv.license),'החזרות')),
-      backgroundColor: DRIVERS.map((_,i)=>COLORS[i])
+      data: drvVals,
+      backgroundColor: DRIVERS.map((_,i)=>COLORS[i]),
+      // ערכי-מינימום כדי שעמודות 0 ייראו גם הן (פס דק 2% מהמקסימום)
+      borderWidth: 0,
+      barThickness: 'flex',
+      maxBarThickness: 80
     }]
-  }, { plugins:{ legend:{display:false} } });
+  }, {
+    plugins:{
+      legend:{display:false},
+      tooltip:{ callbacks:{ label: c => 'החזרות: ' + c.parsed.y } }
+    },
+    scales:{
+      y:{ beginAtZero:true, suggestedMax: Math.max(...drvVals, 5) + 2, ticks:{ stepSize:1, font:{family:'Heebo',size:11}} },
+      x:{ ticks:{font:{family:'Heebo',size:13, weight:'bold'}} }
+    },
+    animation:{
+      onComplete: function() {
+        const ctx = this.ctx;
+        ctx.font = 'bold 14px Heebo';
+        ctx.fillStyle = '#1a1a2e';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        this.data.datasets[0].data.forEach((v, i) => {
+          const bar = this.getDatasetMeta(0).data[i];
+          ctx.fillText(v, bar.x, bar.y - 4);
+        });
+      }
+    }
+  });
 
   // ── Weekly per driver (stacked bar) ──
   const byWeek = groupBy(data, 'week');
