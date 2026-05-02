@@ -74,6 +74,7 @@
     <button class="tab-btn border-2 border-transparent rounded-t-lg px-4 py-3 text-sm font-semibold text-gray-600 whitespace-nowrap" onclick="showTab('days',this)">📅 ימי נסיעה</button>
     <button class="tab-btn border-2 border-transparent rounded-t-lg px-4 py-3 text-sm font-semibold text-gray-600 whitespace-nowrap" onclick="showTab('cartons',this)">📦 קרטונים</button>
     <button class="tab-btn border-2 border-transparent rounded-t-lg px-4 py-3 text-sm font-semibold text-gray-600 whitespace-nowrap" onclick="showTab('returns',this)">↩️ החזרות</button>
+    <button class="tab-btn border-2 border-transparent rounded-t-lg px-4 py-3 text-sm font-semibold text-gray-600 whitespace-nowrap" onclick="showTab('branchAnalysis',this)">🔍 ניתוח סניף</button>
   </div>
 </nav>
 
@@ -294,6 +295,98 @@
   <div class="bg-white rounded-xl p-5 shadow-sm">
     <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">📅 החזרות חודשי — לפי נהג</h3>
     <div class="chart-container" style="height:300px"><canvas id="chartRetDaily"></canvas></div>
+  </div>
+
+</div>
+
+<!-- ===== TAB 7: ניתוח סניף ===== -->
+<div id="tab-branchAnalysis" class="tab-content fade-in">
+
+  <!-- בורר סניף -->
+  <div class="bg-white rounded-xl p-5 shadow-sm mb-5">
+    <div class="flex flex-wrap items-center gap-3">
+      <label class="font-semibold text-[#1a1a2e]">בחר סניף:</label>
+      <input type="text" id="baSearch" placeholder="חיפוש לפי שם/מספר..." oninput="updateBranchSelect()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-[#0f3460]">
+      <select id="baBranch" onchange="renderBranchAnalysisTab()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm flex-1 max-w-md"></select>
+      <button onclick="exportBranchHistory()" class="bg-[#0f3460] hover:bg-[#1a4480] text-white px-3 py-1.5 rounded-lg text-sm font-semibold">ייצוא היסטוריה</button>
+    </div>
+  </div>
+
+  <!-- כרטיס פרופיל -->
+  <div id="baProfile" class="bg-white rounded-xl p-5 shadow-sm mb-5"></div>
+
+  <!-- KPIs -->
+  <div id="baKpis" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5"></div>
+
+  <!-- 2 גרפים בשורה: תדירות שבועית + פיצול יבש/בצק -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-2 pb-2 border-b">📆 תדירות הזמנות לפי שבוע</h3>
+      <p id="baFrequencyNote" class="text-sm text-gray-500 mb-3"></p>
+      <div class="chart-container" style="height:240px"><canvas id="baChartFreq"></canvas></div>
+    </div>
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-2 pb-2 border-b">🥧 פיצול יבש / בצק</h3>
+      <p id="baSplitNote" class="text-sm text-gray-500 mb-3"></p>
+      <div class="chart-container" style="height:240px"><canvas id="baChartSplit"></canvas></div>
+    </div>
+  </div>
+
+  <!-- מגמת תחילת/סוף חודש -->
+  <div class="bg-white rounded-xl p-5 shadow-sm mb-5">
+    <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">📈 הפרש הזמנות: תחילת חודש (1-15) ↔ סוף חודש (16-31)</h3>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div class="chart-container" style="height:260px"><canvas id="baChartHalves"></canvas></div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-[#f0f4ff]">
+              <th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">חודש</th>
+              <th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">חצי 1 (1-15)</th>
+              <th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">חצי 2 (16-31)</th>
+              <th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">הפרש</th>
+            </tr>
+          </thead>
+          <tbody id="baTbodyHalves"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- מגמת זמן + החזרות -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">📈 מגמת משטחים לאורך זמן</h3>
+      <div class="chart-container" style="height:240px"><canvas id="baChartTrend"></canvas></div>
+    </div>
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-bold text-[#1a1a2e] mb-2 pb-2 border-b">↩️ החזרות</h3>
+      <p id="baReturnsNote" class="text-sm text-gray-500 mb-3"></p>
+      <div class="chart-container" style="height:200px"><canvas id="baChartReturns"></canvas></div>
+    </div>
+  </div>
+
+  <!-- היסטוריית ביקורים מלאה -->
+  <div class="bg-white rounded-xl p-5 shadow-sm">
+    <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">📋 היסטוריית משלוחים</h3>
+    <div class="overflow-x-auto" style="max-height:500px">
+      <table class="w-full text-sm">
+        <thead class="sticky top-0 bg-[#f0f4ff]">
+          <tr>
+            <th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">תאריך</th>
+            <th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">יום</th>
+            <th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">שבוע</th>
+            <th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0]">נהג</th>
+            <th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">יבש</th>
+            <th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">בצק</th>
+            <th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">סה"כ</th>
+            <th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">קרטונים</th>
+            <th class="px-3 py-2 font-semibold text-gray-600 border-b-2 border-[#e8e8f0] text-center">החזרות</th>
+          </tr>
+        </thead>
+        <tbody id="baTbodyHistory"></tbody>
+      </table>
+    </div>
   </div>
 
 </div>
@@ -703,6 +796,8 @@ function renderAll() {
   renderDaysTab();
   renderCartonsTab();
   renderReturnsTab();
+  updateBranchSelect();
+  renderBranchAnalysisTab();
 }
 
 // ─────────────────────────────────────────────────────
@@ -1156,6 +1251,221 @@ function renderReturnsTab() {
       backgroundColor: drvColor(nm)
     }))
   }, { scales:{ x:{stacked:true,ticks:{font:{family:'Heebo',size:11}}}, y:{stacked:true,ticks:{font:{family:'Heebo',size:11}}} } });
+}
+
+// ─────────────────────────────────────────────────────
+// TAB 7: BRANCH ANALYSIS
+// ─────────────────────────────────────────────────────
+function updateBranchSelect() {
+  const sel = document.getElementById('baBranch');
+  if (!sel) return;
+  const search = (document.getElementById('baSearch').value || '').trim().toLowerCase();
+  // רק סניפים עם רשומות בפועל ב-FILTERED
+  const branches = {};
+  FILTERED.forEach(d => {
+    if (d.branch_num && !branches[d.branch_num]) {
+      branches[d.branch_num] = { num: d.branch_num, name: d.branch_name, area: d.area };
+    }
+  });
+  let list = Object.values(branches);
+  if (search) list = list.filter(b => b.name.toLowerCase().includes(search) || String(b.num).includes(search));
+  list.sort((a,b) => a.name.localeCompare(b.name, 'he'));
+  const prev = sel.value;
+  sel.innerHTML = list.map(b => `<option value="${b.num}">${b.num} — ${b.name}${b.area?' ('+b.area+')':''}</option>`).join('');
+  if (prev && list.some(b => String(b.num) === prev)) sel.value = prev;
+  renderBranchAnalysisTab();
+}
+
+function renderBranchAnalysisTab() {
+  const sel = document.getElementById('baBranch');
+  if (!sel || !sel.value) return;
+  const bnum = parseInt(sel.value);
+  const recs = FILTERED.filter(d => d.branch_num === bnum);
+  if (!recs.length) {
+    document.getElementById('baProfile').innerHTML = '<p class="text-gray-500">אין נתונים לסניף זה בפילטר הנוכחי.</p>';
+    document.getElementById('baKpis').innerHTML = '';
+    document.getElementById('baTbodyHistory').innerHTML = '';
+    document.getElementById('baTbodyHalves').innerHTML = '';
+    return;
+  }
+
+  const sample = recs[0];
+  const branchMeta = BRANCHES.find(b => b.num === bnum);
+  const stdDays = branchMeta ? branchMeta.days.join(', ') : '—';
+
+  // נהג עיקרי
+  const drvCount = {};
+  recs.forEach(r => { if (r.driver_name) drvCount[r.driver_name] = (drvCount[r.driver_name]||0) + 1; });
+  const mainDrv = Object.entries(drvCount).sort((a,b) => b[1]-a[1])[0];
+  const mainDrvLabel = mainDrv ? `${mainDrv[0]} (${mainDrv[1]} משלוחים)` : '—';
+
+  // ── פרופיל ──
+  const areaColors = { מרכז:'#0f3460', צפון:'#2ecc71', דרום:'#e94560', ירושלים:'#f39c12' };
+  document.getElementById('baProfile').innerHTML = `
+    <div class="flex flex-wrap items-center gap-4">
+      <div class="flex-1 min-w-[200px]">
+        <div class="text-2xl font-bold text-[#1a1a2e]">${sample.branch_name}</div>
+        <div class="text-sm text-gray-500"><span dir="ltr">#${bnum}</span></div>
+      </div>
+      <div><span class="px-3 py-1 rounded-full text-sm font-semibold text-white" style="background:${areaColors[sample.area]||'#888'}">${sample.area||'—'}</span></div>
+      <div class="text-sm"><span class="text-gray-500">ימי משלוח קבועים:</span> <strong>${stdDays}</strong></div>
+      <div class="text-sm"><span class="text-gray-500">נהג עיקרי:</span> <strong>${mainDrvLabel}</strong></div>
+    </div>`;
+
+  // ── KPIs ──
+  const days = new Set(recs.map(r => r.date)).size;
+  const totalY = sumField(recs,'יבש'), totalB = sumField(recs,'בצק'), totalC = sumField(recs,'קרטונים');
+  const totalP = totalY + totalB;
+  const totalRet = sumField(recs,'החזרות');
+  const palletsPerDay = days ? (totalP/days).toFixed(1) : '0';
+  const cartonsPerDay = days ? (totalC/days).toFixed(0) : '0';
+  // חציון משטחים ביום
+  const palletsByDate = {};
+  recs.forEach(r => { palletsByDate[r.date] = (palletsByDate[r.date]||0) + r.יבש + r.בצק; });
+  const sorted = Object.values(palletsByDate).sort((a,b) => a-b);
+  const median = sorted.length ? (sorted.length%2 ? sorted[(sorted.length-1)/2] : ((sorted[sorted.length/2-1]+sorted[sorted.length/2])/2)) : 0;
+  const retPct = totalP ? (totalRet/totalP*100).toFixed(1) : '0';
+
+  document.getElementById('baKpis').innerHTML = `
+    <div class="kpi-card bg-white rounded-xl p-4 shadow-sm text-center" style="border-top-color:#0f3460">
+      <div class="text-xs text-gray-500">משלוחים</div>
+      <div class="text-2xl font-bold text-[#0f3460] num">${days}</div>
+    </div>
+    <div class="kpi-card bg-white rounded-xl p-4 shadow-sm text-center" style="border-top-color:#2ecc71">
+      <div class="text-xs text-gray-500">משטחים ביום (ממוצע)</div>
+      <div class="text-2xl font-bold text-[#2ecc71] num">${palletsPerDay}</div>
+      <div class="text-xs text-gray-400">חציון: ${median}</div>
+    </div>
+    <div class="kpi-card bg-white rounded-xl p-4 shadow-sm text-center" style="border-top-color:#f39c12">
+      <div class="text-xs text-gray-500">קרטונים ביום</div>
+      <div class="text-2xl font-bold text-amber-600 num">${cartonsPerDay}</div>
+    </div>
+    <div class="kpi-card bg-white rounded-xl p-4 shadow-sm text-center" style="border-top-color:#9b59b6">
+      <div class="text-xs text-gray-500">סה"כ משטחים</div>
+      <div class="text-2xl font-bold text-purple-700 num">${n(totalP)}</div>
+      <div class="text-xs text-gray-400">${n(totalY)} יבש · ${n(totalB)} בצק</div>
+    </div>
+    <div class="kpi-card bg-white rounded-xl p-4 shadow-sm text-center" style="border-top-color:#e94560">
+      <div class="text-xs text-gray-500">החזרות</div>
+      <div class="text-2xl font-bold ${totalRet>0?'text-[#e94560]':'text-gray-400'} num">${n(totalRet)}</div>
+      <div class="text-xs text-gray-400">${retPct}% ממשטחים</div>
+    </div>`;
+
+  // ── 1) תדירות שבועית ──
+  const byWeek = groupBy(recs, 'week');
+  const weeks = Object.keys(byWeek).map(Number).sort((a,b) => a-b);
+  const weekFreq = weeks.map(w => new Set(byWeek[w].map(r => r.date)).size);
+  const avgFreq = weekFreq.length ? (weekFreq.reduce((a,b)=>a+b,0) / weekFreq.length) : 0;
+  let freqLabel = avgFreq < 1.3 ? 'פעם בשבוע' : avgFreq < 2.3 ? 'פעמיים בשבוע' : avgFreq < 3.3 ? 'שלוש פעמים בשבוע' : `${avgFreq.toFixed(1)} פעמים בשבוע`;
+  document.getElementById('baFrequencyNote').innerHTML = `ממוצע: <strong>${avgFreq.toFixed(2)}</strong> משלוחים בשבוע — <strong>${freqLabel}</strong>`;
+  makeChart('baChartFreq', 'bar', {
+    labels: weeks.map(w => 'ש'+w),
+    datasets: [{ label:'ימי משלוח', data: weekFreq, backgroundColor:'#0f3460' }]
+  }, { plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, max:5, ticks:{stepSize:1}}}});
+
+  // ── 2) פיצול יבש/בצק ──
+  let onlyY=0, onlyB=0, both=0;
+  recs.forEach(r => {
+    if (r.יבש>0 && r.בצק>0) both++;
+    else if (r.יבש>0) onlyY++;
+    else if (r.בצק>0) onlyB++;
+  });
+  const totalSplits = onlyY+onlyB+both;
+  document.getElementById('baSplitNote').innerHTML = totalSplits ?
+    `מתוך <strong>${totalSplits}</strong> משלוחים: שניהם יחד <strong>${both}</strong>, רק יבש <strong>${onlyY}</strong>, רק בצק <strong>${onlyB}</strong>` : '—';
+  makeChart('baChartSplit', 'doughnut', {
+    labels: ['יבש + בצק','רק יבש','רק בצק'],
+    datasets: [{ data: [both, onlyY, onlyB], backgroundColor:['#0f3460','#2ecc71','#e94560'] }]
+  }, { plugins:{ legend:{position:'bottom', labels:{font:{family:'Heebo',size:12}}} } });
+
+  // ── 6) תחילת/סוף חודש ──
+  const halvesByMonth = {};
+  recs.forEach(r => {
+    const day = parseInt(r.date.split('/')[0]);
+    const key = `${r.year}-${String(r.month).padStart(2,'0')}`;
+    if (!halvesByMonth[key]) halvesByMonth[key] = { month: r.month, year: r.year, h1: [], h2: [] };
+    const tot = r.יבש + r.בצק;
+    if (day <= 15) halvesByMonth[key].h1.push(tot);
+    else halvesByMonth[key].h2.push(tot);
+  });
+  const halvesRows = Object.entries(halvesByMonth).sort().map(([k, v]) => {
+    const a1 = v.h1.length ? v.h1.reduce((s,x)=>s+x,0)/v.h1.length : 0;
+    const a2 = v.h2.length ? v.h2.reduce((s,x)=>s+x,0)/v.h2.length : 0;
+    return { label: MONTH_NAMES[v.month] + ' ' + v.year, h1: a1, h2: a2, diff: a2 - a1 };
+  });
+  document.getElementById('baTbodyHalves').innerHTML = halvesRows.map((r,i) => {
+    const arrow = r.diff > 0.3 ? '<span class="text-green-600">↑</span>' : r.diff < -0.3 ? '<span class="text-red-600">↓</span>' : '<span class="text-gray-400">—</span>';
+    const pct = r.h1 ? ((r.diff/r.h1)*100).toFixed(0)+'%' : '—';
+    return `<tr class="${i%2?'bg-gray-50':''}">
+      <td class="px-3 py-2 font-medium">${r.label}</td>
+      <td class="px-3 py-2 text-center num">${r.h1.toFixed(1)}</td>
+      <td class="px-3 py-2 text-center num">${r.h2.toFixed(1)}</td>
+      <td class="px-3 py-2 text-center num">${arrow} ${r.diff>=0?'+':''}${r.diff.toFixed(1)} (${pct})</td>
+    </tr>`;
+  }).join('');
+  makeChart('baChartHalves', 'line', {
+    labels: halvesRows.map(r => r.label),
+    datasets: [
+      { label:'תחילת חודש (1-15)', data: halvesRows.map(r=>r.h1), borderColor:'#0f3460', backgroundColor:'#0f346030', tension:.3 },
+      { label:'סוף חודש (16-31)', data: halvesRows.map(r=>r.h2), borderColor:'#e94560', backgroundColor:'#e9456030', tension:.3 }
+    ]
+  });
+
+  // ── מגמת זמן (סה"כ לפי שבוע) ──
+  makeChart('baChartTrend', 'line', {
+    labels: weeks.map(w => 'שבוע '+w),
+    datasets: [
+      { label:'יבש', data: weeks.map(w => sumField(byWeek[w],'יבש')), borderColor:'#0f3460', backgroundColor:'#0f346030', tension:.3 },
+      { label:'בצק', data: weeks.map(w => sumField(byWeek[w],'בצק')), borderColor:'#2ecc71', backgroundColor:'#2ecc7130', tension:.3 }
+    ]
+  });
+
+  // ── החזרות ──
+  if (totalRet > 0) {
+    document.getElementById('baReturnsNote').innerHTML = `סה"כ <strong>${totalRet}</strong> משטחים הוחזרו (${retPct}% מהמשלוחים) — מוצגים לפי שבוע.`;
+    makeChart('baChartReturns', 'bar', {
+      labels: weeks.map(w => 'ש'+w),
+      datasets: [{ label:'החזרות', data: weeks.map(w => sumField(byWeek[w],'החזרות')), backgroundColor:'#e94560' }]
+    }, { plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, ticks:{stepSize:1}}}});
+  } else {
+    document.getElementById('baReturnsNote').innerHTML = '<span class="text-green-700 font-semibold">✓ הסניף לא החזיר משטחים</span>';
+    makeChart('baChartReturns', 'bar', { labels:[], datasets:[{data:[]}] }, {});
+  }
+
+  // ── היסטוריית משלוחים ──
+  const parseDate = s => { const [dd,mm,yy] = s.split('/'); return `${yy.length===2?'20'+yy:yy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`; };
+  const sortedRecs = [...recs].sort((a,b) => parseDate(b.date).localeCompare(parseDate(a.date)));
+  document.getElementById('baTbodyHistory').innerHTML = sortedRecs.map((r,i) => {
+    const tot = r.יבש + r.בצק;
+    return `<tr class="${i%2?'bg-gray-50':''}">
+      <td class="px-3 py-2 num"><span dir="ltr">${r.date}</span></td>
+      <td class="px-3 py-2">${r.day}</td>
+      <td class="px-3 py-2 text-center num text-gray-500">${r.week}</td>
+      <td class="px-3 py-2">${r.driver_name||'—'}</td>
+      <td class="px-3 py-2 text-center num">${r.יבש||'·'}</td>
+      <td class="px-3 py-2 text-center num">${r.בצק||'·'}</td>
+      <td class="px-3 py-2 text-center num font-bold text-[#0f3460]">${tot||'·'}</td>
+      <td class="px-3 py-2 text-center num text-amber-700">${r.קרטונים||'·'}</td>
+      <td class="px-3 py-2 text-center num ${r.החזרות>0?'text-[#e94560] font-semibold':'text-gray-300'}">${r.החזרות||'·'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportBranchHistory() {
+  const sel = document.getElementById('baBranch');
+  if (!sel || !sel.value) return;
+  const bnum = parseInt(sel.value);
+  const recs = FILTERED.filter(d => d.branch_num === bnum);
+  if (!recs.length) return alert('אין נתונים לייצוא');
+  const headers = ['תאריך','יום','שבוע','חודש','שנה','נהג','משאית','יבש','בצק','סה"כ','קרטונים','החזרות'];
+  const rows = recs.map(r => [r.date, r.day, r.week, r.month, r.year, r.driver_name, r.driver_lic, r.יבש, r.בצק, r.יבש+r.בצק, r.קרטונים, r.החזרות]);
+  const csv = '﻿' + headers.join(',') + '\n' + rows.map(r => r.map(c => `"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `סניף_${bnum}_${recs[0].branch_name}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ─────────────────────────────────────────────────────
