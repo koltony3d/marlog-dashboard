@@ -27,6 +27,8 @@
   .fade-in { animation: fadeIn .3s ease; }
   @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
   select, input { direction: rtl; }
+  /* תיקון אופציות סלקט בכותרת — text-white לבן על רקע לבן בלתי קריא */
+  header select option { color: #1a1a2e; background: #ffffff; }
   .filter-bar select { background-image: none; }
   @media(max-width:640px) {
     .kpi-grid { grid-template-columns: repeat(2,1fr) !important; }
@@ -247,7 +249,7 @@
     </div>
   </div>
   <div class="bg-white rounded-xl p-5 shadow-sm">
-    <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">טופ 25 סניפים — קרטונים</h3>
+    <h3 class="font-bold text-[#1a1a2e] mb-4 pb-2 border-b">כל הסניפים — קרטונים</h3>
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
@@ -873,15 +875,18 @@ function renderBranchTab() {
     };
   }).sort((a,b) => b.total - a.total);
 
-  // Top 15 chart
-  const top15 = branchList.slice(0, 15);
+  // גרף כל הסניפים — ממוין מהגבוה לנמוך, עם גובה דינמי לגלילה
+  const chartContainer = document.getElementById('chartTopBranches').parentElement;
+  chartContainer.style.height = Math.max(280, branchList.length * 22) + 'px';
   makeChart('chartTopBranches', 'bar', {
-    labels: top15.map(b => b.name),
+    labels: branchList.map(b => b.name),
     datasets: [
-      { label:'יבש', data: top15.map(b=>b.יבש), backgroundColor:'#0f3460' },
-      { label:'בצק', data: top15.map(b=>b.בצק), backgroundColor:'#2ecc71' }
+      { label:'יבש', data: branchList.map(b=>b.יבש), backgroundColor:'#0f3460' },
+      { label:'בצק', data: branchList.map(b=>b.בצק), backgroundColor:'#2ecc71' }
     ]
-  }, { indexAxis:'y', scales:{ x:{stacked:true,ticks:{font:{family:'Heebo',size:10}}}, y:{stacked:true,ticks:{font:{family:'Heebo',size:11}}} } });
+  }, { indexAxis:'y', maintainAspectRatio:false,
+       scales:{ x:{stacked:true,ticks:{font:{family:'Heebo',size:10}}},
+                y:{stacked:true,ticks:{font:{family:'Heebo',size:10}, autoSkip:false}} } });
 
   const areaColors = { מרכז:'#0f3460', צפון:'#2ecc71', דרום:'#e94560', ירושלים:'#f39c12' };
   document.getElementById('tbodyBranch').innerHTML = branchList.map((b,i) => `
@@ -989,14 +994,14 @@ function renderCartonsTab() {
       backgroundColor: COLORS }]
   }, { plugins:{ legend:{display:false} } });
 
-  // Top 25 branches
+  // כל הסניפים, ממוינים לפי קרטונים
   const byBranch = groupBy(data, 'branch_num');
-  const top25 = Object.keys(byBranch)
+  const allBranches = Object.keys(byBranch)
     .map(num => ({ num:parseInt(num), name: byBranch[num][0].branch_name, area: byBranch[num][0].area,
       total: sumField(byBranch[num],'קרטונים'), visits: byBranch[num].length }))
-    .sort((a,b) => b.total - a.total).slice(0,25);
+    .sort((a,b) => b.total - a.total);
 
-  document.getElementById('tbodyCartons').innerHTML = top25.map((b,i) => `
+  document.getElementById('tbodyCartons').innerHTML = allBranches.map((b,i) => `
     <tr class="${i%2?'bg-gray-50':''}">
       <td class="px-3 py-2 text-center num text-gray-400 font-semibold">${i+1}</td>
       <td class="px-3 py-2 font-medium">${b.name}</td>
